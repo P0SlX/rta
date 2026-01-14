@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import VolumeSlider from "./VolumeSlider.vue";
 
 const props = defineProps<{
     isPlaying: boolean;
@@ -7,6 +8,7 @@ const props = defineProps<{
     currentTime: number;
     duration: number;
     fileName: string;
+    volume: number;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +19,7 @@ const emit = defineEmits<{
     seek: [time: number];
     toggleSettings: [];
     toggleStats: [];
+    volumeChange: [value: number];
 }>();
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -66,7 +69,7 @@ function openFileDialog() {
 
         <div class="flex items-center gap-3">
             <button
-                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group relative"
+                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group relative cursor-pointer"
                 @click="openFileDialog"
                 title="Charger un fichier"
             >
@@ -88,7 +91,7 @@ function openFileDialog() {
 
             <!-- Play/Pause -->
             <button
-                class="p-3 bg-[#00c896] hover:bg-[#00daa8] text-black rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-12"
+                class="p-3 bg-[#00c896] hover:bg-[#00daa8] text-black rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-12 cursor-pointer"
                 :disabled="!isLoaded"
                 @click="isPlaying ? emit('pause') : emit('play')"
             >
@@ -124,7 +127,7 @@ function openFileDialog() {
 
             <!-- Stop -->
             <button
-                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/5"
+                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 cursor-pointer"
                 :disabled="!isLoaded"
                 @click="emit('stop')"
             >
@@ -198,8 +201,14 @@ function openFileDialog() {
 
         <div class="h-8 w-px bg-white/10 mx-2 hidden lg:block"></div>
 
+        <VolumeSlider
+            :volume="volume"
+            @volume-change="(value) => emit('volumeChange', value)"
+        />
+
         <button
-            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5"
+            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            :disabled="!isLoaded"
             @click="emit('toggleStats')"
             title="Statistiques"
         >
@@ -220,7 +229,7 @@ function openFileDialog() {
         </button>
 
         <button
-            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group"
+            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group cursor-pointer"
             @click="emit('toggleSettings')"
             title="Réglages"
         >

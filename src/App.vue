@@ -15,7 +15,6 @@ import type {
     SpectrogramDirection,
 } from "./types/rta";
 
-// Initialisation du composable audio RTA
 const audioRta = useAudioRta();
 
 const displayMode = ref<DisplayMode>("bars");
@@ -291,6 +290,10 @@ function handleUpdateSpectrogramColumnInterval(interval: number) {
     spectrogramColumnInterval.value = interval;
 }
 
+function handleVolumeChange(value: number) {
+    audioRta.setVolume(value);
+}
+
 const stats = computed(() => {
     if (!audioRta.isLoaded.value) return null;
     const avgDb = bandData.value
@@ -538,6 +541,7 @@ const stats = computed(() => {
             :current-time="audioRta.currentTime.value"
             :duration="audioRta.duration.value"
             :file-name="audioRta.fileName.value"
+            :volume="audioRta.volume.value"
             @file-selected="handleFileSelected"
             @play="handlePlay"
             @pause="handlePause"
@@ -545,6 +549,7 @@ const stats = computed(() => {
             @seek="handleSeek"
             @toggle-settings="showSettings = !showSettings"
             @toggle-stats="showStats = !showStats"
+            @volume-change="handleVolumeChange"
         />
     </div>
 </template>

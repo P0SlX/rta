@@ -22,6 +22,7 @@ export function useAudioRta() {
   let audioContext: AudioContext | null = null;
   let analyserNode: AnalyserNode | null = null;
   let sourceNode: MediaElementAudioSourceNode | null = null;
+  let gainNode: GainNode | null = null;
   let audioElement: HTMLAudioElement | null = null;
 
   const isPlaying = shallowRef(false);
@@ -31,6 +32,7 @@ export function useAudioRta() {
   const fileName = shallowRef("");
   const error = shallowRef<string | null>(null);
   const sampleRate = shallowRef(44100);
+  const volume = shallowRef(0.5);
 
   const fftSize = shallowRef<FftSize>(DEFAULT_PARAMS.fftSize);
   const smoothingTimeConstant = shallowRef(
@@ -146,7 +148,12 @@ export function useAudioRta() {
       analyserNode = audioContext.createAnalyser();
       analyserNode.fftSize = params.fftSize;
       analyserNode.smoothingTimeConstant = params.smoothingTimeConstant;
-      analyserNode.connect(audioContext.destination);
+
+      gainNode = audioContext.createGain();
+      gainNode.gain.value = volume.value;
+
+      analyserNode.connect(gainNode);
+      gainNode.connect(audioContext.destination);
 
       initializeArrays();
     } catch (e) {
@@ -176,7 +183,7 @@ export function useAudioRta() {
         audioElement.addEventListener("ended", handleEnded);
         audioElement.addEventListener("error", handleError);
 
-        if (audioContext && analyserNode) {
+        if (audioContext && analyserNode && gainNode) {
           sourceNode = audioContext.createMediaElementSource(audioElement);
           sourceNode.connect(analyserNode);
         }
@@ -325,6 +332,18 @@ export function useAudioRta() {
     initializeArrays();
   }
 
+  function setVolume(value: number): void {
+    const clamped = value < 0 ? 0 : value > 1 ? 1 : value;
+    volume.value = clamped;
+    if (gainNode) {
+      gainNode.gain.value = clamped;
+    }
+  }
+
+  function getVolume(): number {
+    return volume.value;
+  }
+
   function getFrequencyData(): FrequencyDataResult | null {
     if (!analyserNode || !frequencyData || !smoothedData || !peakData) {
       return null;
@@ -422,9 +441,13 @@ export function useAudioRta() {
     if (analyserNode) {
       analyserNode.disconnect();
     }
+    if (gainNode) {
+      gainNode.disconnect();
+    }
     if (audioContext) {
       audioContext.close();
     }
+    gainNode = null;
     audioElement = null;
     sourceNode = null;
     analyserNode = null;
@@ -443,6 +466,7 @@ export function useAudioRta() {
     fileName,
     error,
     sampleRate,
+    volume,
 
     fftSize,
     smoothingTimeConstant,
@@ -465,6 +489,8 @@ export function useAudioRta() {
     updatePeakHold,
     updatePeakDecay,
     updateNumBands,
+    setVolume,
+    getVolume,
     getFrequencyData,
     getBands,
     resumeContext,
