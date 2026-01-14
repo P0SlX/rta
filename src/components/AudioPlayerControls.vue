@@ -155,8 +155,8 @@ const peakHoldModel = computed({
                     <span>{{ usableBins }} bins utiles</span>
                 </div>
                 <div
-                    v-if="isOversampled"
                     class="text-[10px] text-orange-400/80 mt-1"
+                    :class="{ invisible: !isOversampled }"
                 >
                     Bandes > bins : plusieurs bandes partagent les mêmes
                     données. Augmentez la FFT.
