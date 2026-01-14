@@ -57,7 +57,7 @@ function openFileDialog() {
 
 <template>
     <div
-        class="w-full bg-[#1a1a2e]/95 backdrop-blur-xl border-t border-white/10 px-6 py-4 flex items-center gap-6"
+        class="w-full bg-[#1a1a2e]/95 backdrop-blur-xl border-t border-white/10 px-4 py-3 md:px-6 md:py-4 flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-6 justify-between"
     >
         <input
             ref="fileInput"
@@ -69,7 +69,7 @@ function openFileDialog() {
 
         <div class="flex items-center gap-3">
             <button
-                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group relative cursor-pointer"
+                class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group relative cursor-pointer"
                 @click="openFileDialog"
                 title="Charger un fichier"
             >
@@ -91,7 +91,7 @@ function openFileDialog() {
 
             <!-- Play/Pause -->
             <button
-                class="p-3 bg-[#00c896] hover:bg-[#00daa8] text-black rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-12 cursor-pointer"
+                class="p-2 md:p-3 bg-[#00c896] hover:bg-[#00daa8] text-black rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-10 md:w-12 cursor-pointer"
                 :disabled="!isLoaded"
                 @click="isPlaying ? emit('pause') : emit('play')"
             >
@@ -127,7 +127,7 @@ function openFileDialog() {
 
             <!-- Stop -->
             <button
-                class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 cursor-pointer"
+                class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 cursor-pointer"
                 :disabled="!isLoaded"
                 @click="emit('stop')"
             >
@@ -147,7 +147,9 @@ function openFileDialog() {
         </div>
 
         <!-- Barre de progression -->
-        <div class="flex-1 flex items-center gap-4">
+        <div
+            class="w-full order-first md:w-auto md:order-0 md:flex-1 flex items-center gap-5 md:gap-4"
+        >
             <span class="font-mono text-gray-400 text-xs w-10 text-right">{{
                 formatTime(currentTime)
             }}</span>
@@ -201,57 +203,60 @@ function openFileDialog() {
 
         <div class="h-8 w-px bg-white/10 mx-2 hidden lg:block"></div>
 
-        <VolumeSlider
-            :volume="volume"
-            @volume-change="(value) => emit('volumeChange', value)"
-        />
+        <div class="flex items-center gap-3 md:gap-6">
+            <VolumeSlider
+                class="hidden md:block"
+                :volume="volume"
+                @volume-change="(value) => emit('volumeChange', value)"
+            />
 
-        <button
-            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            :disabled="!isLoaded"
-            @click="emit('toggleStats')"
-            title="Statistiques"
-        >
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+            <button
+                class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                :disabled="!isLoaded"
+                @click="emit('toggleStats')"
+                title="Statistiques"
             >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-            </svg>
-        </button>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                </svg>
+            </button>
 
-        <button
-            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group cursor-pointer"
-            @click="emit('toggleSettings')"
-            title="Réglages"
-        >
-            <svg
-                class="w-5 h-5 transition-transform group-hover:rotate-90 duration-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <button
+                class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group cursor-pointer"
+                @click="emit('toggleSettings')"
+                title="Réglages"
             >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-            </svg>
-        </button>
+                <svg
+                    class="w-5 h-5 transition-transform group-hover:rotate-90 duration-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                    />
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                </svg>
+            </button>
+        </div>
     </div>
 </template>

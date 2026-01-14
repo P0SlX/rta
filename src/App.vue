@@ -39,7 +39,16 @@ const isDraggingStats = ref(false);
 const statsPanelPosition = ref({ x: 20, y: 20 });
 const dragStartStats = ref({ x: 0, y: 0 });
 
+const isMobile = ref(false);
+
+function checkMobile() {
+    isMobile.value = window.innerWidth < 768;
+}
+
 onMounted(() => {
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
     if (panelRef.value) {
         const rect = panelRef.value.getBoundingClientRect();
         panelPosition.value = {
@@ -47,6 +56,10 @@ onMounted(() => {
             y: window.innerHeight - rect.height - 100,
         };
     }
+});
+
+onUnmounted(() => {
+    window.removeEventListener("resize", checkMobile);
 });
 
 function startDrag(event: MouseEvent | TouchEvent) {
@@ -387,19 +400,29 @@ const stats = computed(() => {
                 <div
                     v-if="showSettings"
                     ref="panelRef"
-                    class="fixed pointer-events-auto w-full max-w-5xl bg-[#1a1a2e]/95 backdrop-blur-xl border-2 border-white/20 rounded-3xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col max-h-[75vh]"
-                    :style="{
-                        left: panelPosition.x + 'px',
-                        top: panelPosition.y + 'px',
-                        cursor: isDragging ? 'grabbing' : 'default',
-                    }"
+                    class="absolute md:fixed z-20 inset-0 md:inset-auto pointer-events-auto bg-[#1a1a2e]/95 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col w-full h-full md:h-auto md:max-h-[75vh] md:w-auto md:max-w-5xl md:border-2 md:border-white/20 md:rounded-3xl"
+                    :style="
+                        !isMobile
+                            ? {
+                                  left: panelPosition.x + 'px',
+                                  top: panelPosition.y + 'px',
+                                  cursor: isDragging ? 'grabbing' : 'default',
+                              }
+                            : {}
+                    "
                 >
                     <!-- En-tête -->
                     <div
                         @mousedown="startDrag"
                         @touchstart="startDrag"
                         class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
-                        :style="{ cursor: isDragging ? 'grabbing' : 'grab' }"
+                        :style="{
+                            cursor: isMobile
+                                ? 'default'
+                                : isDragging
+                                  ? 'grabbing'
+                                  : 'grab',
+                        }"
                     >
                         <h2
                             class="text-sm font-bold uppercase tracking-[0.2em] text-gray-300"
@@ -415,7 +438,7 @@ const stats = computed(() => {
                         </button>
                     </div>
 
-                    <div class="overflow-y-auto p-4 space-y-5">
+                    <div class="flex-1 overflow-y-auto p-4 space-y-5">
                         <!-- Composant Contrôles Audio (Curseurs/Réglages) -->
                         <AudioPlayerControls
                             :error="audioRta.error.value"
@@ -475,19 +498,29 @@ const stats = computed(() => {
                 <div
                     v-if="showStats && stats"
                     ref="statsPanelRef"
-                    class="fixed pointer-events-auto w-full max-w-2xl bg-[#1a1a2e]/95 backdrop-blur-xl border-2 border-white/20 rounded-3xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col"
-                    :style="{
-                        left: statsPanelPosition.x + 'px',
-                        top: statsPanelPosition.y + 'px',
-                        cursor: isDraggingStats ? 'grabbing' : 'default',
-                    }"
+                    class="absolute md:fixed z-20 inset-0 md:inset-auto pointer-events-auto bg-[#1a1a2e]/95 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col w-full h-full md:h-auto md:w-full md:max-w-2xl md:border-2 md:border-white/20 md:rounded-3xl"
+                    :style="
+                        !isMobile
+                            ? {
+                                  left: statsPanelPosition.x + 'px',
+                                  top: statsPanelPosition.y + 'px',
+                                  cursor: isDraggingStats
+                                      ? 'grabbing'
+                                      : 'default',
+                              }
+                            : {}
+                    "
                 >
                     <div
                         @mousedown="startDragStats"
                         @touchstart="startDragStats"
                         class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
                         :style="{
-                            cursor: isDraggingStats ? 'grabbing' : 'grab',
+                            cursor: isMobile
+                                ? 'default'
+                                : isDraggingStats
+                                  ? 'grabbing'
+                                  : 'grab',
                         }"
                     >
                         <h2
@@ -504,7 +537,7 @@ const stats = computed(() => {
                         </button>
                     </div>
 
-                    <div class="p-4">
+                    <div class="flex-1 overflow-y-auto p-4">
                         <div
                             class="grid grid-cols-2 gap-x-5 gap-y-3 font-mono text-[11px]"
                         >
