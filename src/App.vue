@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { parseBlob } from "music-metadata";
+import {
+    onMounted,
+    onUnmounted,
+    ref,
+    shallowRef,
+    triggerRef,
+    watch,
+} from "vue";
+import fallbackCoverUrl from "./assets/fallback-cover.svg";
 import AudioPlayerControls from "./components/AudioPlayerControls.vue";
 import PlayerBar from "./components/PlayerBar.vue";
+import PlaylistPanel from "./components/PlaylistPanel.vue";
 import RtaCanvas from "./components/RtaCanvas.vue";
 import SpectrogramCanvas from "./components/SpectrogramCanvas.vue";
 import SpectrogramControls from "./components/SpectrogramControls.vue";
 import { useAudioRta } from "./composables/useAudioRta";
+import type { PlaylistTrack, PlaylistTrackStatus } from "./types/playlist";
 import type {
     ColorMap,
     DisplayMode,
@@ -18,8 +29,8 @@ import type {
 const audioRta = useAudioRta();
 
 const displayMode = ref<DisplayMode>("bars");
-const showStats = ref(false);
 const showSettings = ref(false);
+const showPlaylist = ref(false);
 
 const spectrogramColorMap = ref<ColorMap>("custom");
 const spectrogramFrequencyScale = ref<FrequencyScale>("logarithmic");
@@ -32,12 +43,6 @@ const panelRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
 const panelPosition = ref({ x: 0, y: 0 });
 const dragStart = ref({ x: 0, y: 0 });
-
-// Panneau des stats
-const statsPanelRef = ref<HTMLElement | null>(null);
-const isDraggingStats = ref(false);
-const statsPanelPosition = ref({ x: 20, y: 20 });
-const dragStartStats = ref({ x: 0, y: 0 });
 
 const isMobile = ref(false);
 
@@ -114,62 +119,14 @@ function stopDrag() {
     window.removeEventListener("touchend", stopDrag);
 }
 
-function startDragStats(event: MouseEvent | TouchEvent) {
-    isDraggingStats.value = true;
-    const clientX =
-        "touches" in event ? event.touches[0].clientX : event.clientX;
-    const clientY =
-        "touches" in event ? event.touches[0].clientY : event.clientY;
-
-    dragStartStats.value = {
-        x: clientX - statsPanelPosition.value.x,
-        y: clientY - statsPanelPosition.value.y,
-    };
-
-    window.addEventListener("mousemove", onDragStats);
-    window.addEventListener("mouseup", stopDragStats);
-    window.addEventListener("touchmove", onDragStats);
-    window.addEventListener("touchend", stopDragStats);
-}
-
-function onDragStats(event: MouseEvent | TouchEvent) {
-    if (!isDraggingStats.value || !statsPanelRef.value) return;
-
-    const clientX =
-        "touches" in event ? event.touches[0].clientX : event.clientX;
-    const clientY =
-        "touches" in event ? event.touches[0].clientY : event.clientY;
-
-    const rect = statsPanelRef.value.getBoundingClientRect();
-    let newX = clientX - dragStartStats.value.x;
-    let newY = clientY - dragStartStats.value.y;
-
-    // Garde le panneau dans les limites de la fenêtre
-    const margin = 20;
-    newX = Math.max(
-        margin,
-        Math.min(newX, window.innerWidth - rect.width - margin),
-    );
-    newY = Math.max(
-        margin,
-        Math.min(newY, window.innerHeight - rect.height - margin),
-    );
-
-    statsPanelPosition.value = { x: newX, y: newY };
-}
-
-function stopDragStats() {
-    isDraggingStats.value = false;
-    window.removeEventListener("mousemove", onDragStats);
-    window.removeEventListener("mouseup", stopDragStats);
-    window.removeEventListener("touchmove", onDragStats);
-    window.removeEventListener("touchend", stopDragStats);
-}
-
 // Données de fréquence pour le rendu
 const bandData = shallowRef<Float32Array | null>(null);
 const peakData = shallowRef<Float32Array | null>(null);
 const bands = shallowRef<RtaBand[]>([]);
+
+const queue = ref<PlaylistTrack[]>([]);
+const history = ref<PlaylistTrack[]>([]);
+const currentTrack = ref<PlaylistTrack | null>(null);
 
 let bandDataBuffer: Float32Array | null = null;
 let peakDataBuffer: Float32Array | null = null;
@@ -188,6 +145,7 @@ function updateFrequencyData() {
         if (bandDataBuffer && bandDataBuffer.length === data.bands.length) {
             bandDataBuffer.set(data.bands);
             bandData.value = bandDataBuffer;
+            triggerRef(bandData);
         } else {
             bandDataBuffer = new Float32Array(data.bands);
             bandData.value = bandDataBuffer;
@@ -221,6 +179,24 @@ function stopUpdateLoop() {
     }
 }
 
+const coverUrlRegistry = new Set<string>();
+
+function registerCoverUrl(url?: string) {
+    if (!url || !url.startsWith("blob:")) return;
+    coverUrlRegistry.add(url);
+}
+
+function revokeCoverUrl(url?: string) {
+    if (!url || !url.startsWith("blob:")) return;
+    URL.revokeObjectURL(url);
+    coverUrlRegistry.delete(url);
+}
+
+function revokeAllCoverUrls() {
+    coverUrlRegistry.forEach((url) => URL.revokeObjectURL(url));
+    coverUrlRegistry.clear();
+}
+
 watch(
     () => audioRta.isLoaded.value,
     (loaded) => {
@@ -233,21 +209,175 @@ watch(
 
 onUnmounted(() => {
     stopUpdateLoop();
+    revokeAllCoverUrls();
 });
 
-async function handleFileSelected(file: File) {
+function createTrackId(file: File) {
+    if ("randomUUID" in crypto) {
+        return crypto.randomUUID();
+    }
+    return `${file.name}-${file.size}-${file.lastModified}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+}
+
+function parseTrackInfo(fileName: string) {
+    const baseName = fileName.replace(/\.[^/.]+$/, "");
+    const parts = baseName.split(" - ");
+    if (parts.length >= 2) {
+        return {
+            artist: parts[0].trim() || "Fichier local",
+            title: parts.slice(1).join(" - ").trim() || baseName,
+        };
+    }
+    return { artist: "Fichier local", title: baseName };
+}
+
+function createBaseTrack(
+    file: File,
+    status: PlaylistTrackStatus,
+): PlaylistTrack {
+    const { title, artist } = parseTrackInfo(file.name);
+    return {
+        id: createTrackId(file),
+        title,
+        artist,
+        coverUrl: fallbackCoverUrl,
+        status,
+        file,
+    };
+}
+
+function buildFormatLabel(
+    format?: string,
+    bitDepth?: number,
+    sampleRate?: number,
+    fileName?: string,
+): string | undefined {
+    const extension = fileName?.split(".").pop()?.trim();
+    const normalizedFormat =
+        format || extension
+            ? String(format || extension)
+                  .replace(/^audio\//, "")
+                  .replace(/\s+/g, " ")
+                  .trim()
+            : undefined;
+    const parts: string[] = [];
+    if (normalizedFormat) parts.push(normalizedFormat.toUpperCase());
+    if (bitDepth) parts.push(`${bitDepth} bits`);
+    if (sampleRate) {
+        const khz = (sampleRate / 1000).toFixed(1).replace(/\.0$/, "");
+        parts.push(`${khz}Khz`);
+    }
+    return parts.length ? parts.join(" - ") : undefined;
+}
+
+async function enrichTrackWithMetadata(
+    track: PlaylistTrack,
+): Promise<PlaylistTrack> {
+    if (!track.file) return track;
     try {
-        await audioRta.loadFile(file);
+        const metadata = await parseBlob(track.file);
+        const common = metadata.common;
+        const format = metadata.format;
+
+        const title = common.title?.trim() || track.title;
+        const artist = common.artist?.trim() || track.artist;
+        const album = common.album?.trim();
+
+        let coverUrl = track.coverUrl;
+        const picture = common.picture?.[0];
+        if (picture?.data) {
+            revokeCoverUrl(coverUrl);
+            const blob = new Blob([picture.data as BlobPart], {
+                type: picture.format || "image/jpeg",
+            });
+            coverUrl = URL.createObjectURL(blob);
+            registerCoverUrl(coverUrl);
+        }
+
+        const bitDepth = format.bitsPerSample;
+        const sampleRate = format.sampleRate;
+        const formatLabel = buildFormatLabel(
+            format.container || format.codec || track.file.type,
+            bitDepth,
+            sampleRate,
+            track.file?.name,
+        );
+
+        return {
+            ...track,
+            title,
+            artist,
+            album,
+            coverUrl,
+            bitDepth,
+            sampleRate,
+            formatLabel,
+        };
+    } catch (error) {
+        console.warn("Metadata parsing failed:", error);
+        return track;
+    }
+}
+
+async function loadTrack(track: PlaylistTrack, autoplay = false) {
+    if (!track.file) return;
+    try {
+        await audioRta.loadFile(track.file);
         bands.value = audioRta.getBands();
         startUpdateLoop();
+        if (autoplay) {
+            await audioRta.play();
+        }
     } catch (e) {
         console.error("Échec du chargement du fichier :", e);
     }
 }
 
+function pushToHistory(track: PlaylistTrack) {
+    history.value.unshift({ ...track, status: "played" });
+}
+
+async function setCurrentTrack(track: PlaylistTrack, autoplay = false) {
+    audioRta.stop();
+    currentTrack.value = { ...track, status: "current" };
+    await loadTrack(currentTrack.value, autoplay);
+}
+
+async function handleFilesSelected(files: File[]) {
+    const baseTracks = files.map((file) => createBaseTrack(file, "upcoming"));
+    const newTracks = await Promise.all(
+        baseTracks.map((track) => enrichTrackWithMetadata(track)),
+    );
+
+    queue.value.push(...newTracks);
+
+    if (!currentTrack.value) {
+        const next = queue.value.shift();
+        if (next) {
+            await setCurrentTrack(next, false);
+        }
+    }
+}
+
 async function handlePlay() {
+    if (!audioRta.isLoaded.value && currentTrack.value) {
+        await loadTrack(currentTrack.value, true);
+        return;
+    }
+
+    if (!audioRta.isLoaded.value && queue.value.length) {
+        const next = queue.value.shift();
+        if (next) {
+            await setCurrentTrack(next, true);
+        }
+        return;
+    }
+
     await audioRta.play();
 }
+
 function handlePause() {
     audioRta.pause();
 }
@@ -307,50 +437,72 @@ function handleVolumeChange(value: number) {
     audioRta.setVolume(value);
 }
 
-const stats = computed(() => {
-    if (!audioRta.isLoaded.value) return null;
-    const avgDb = bandData.value
-        ? Array.from(bandData.value).reduce((sum, val) => sum + val, 0) /
-          bandData.value.length
-        : audioRta.minDb.value;
-    const maxDb = bandData.value
-        ? Math.max(...Array.from(bandData.value))
-        : audioRta.minDb.value;
-    const minDb = bandData.value
-        ? Math.min(...Array.from(bandData.value))
-        : audioRta.minDb.value;
-    const dynamicRange = maxDb - minDb;
-    const rms = bandData.value
-        ? Math.sqrt(
-              Array.from(bandData.value)
-                  .map((val) => Math.pow(10, val / 10))
-                  .reduce((sum, val) => sum + val, 0) / bandData.value.length,
-          )
-        : 0;
-    const rmsDb = rms > 0 ? 10 * Math.log10(rms) : audioRta.minDb.value;
+function moveQueueTrack(trackId: string, direction: "up" | "down") {
+    const index = queue.value.findIndex((track) => track.id === trackId);
+    if (index === -1) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= queue.value.length) return;
+    const updated = [...queue.value];
+    [updated[index], updated[targetIndex]] = [
+        updated[targetIndex],
+        updated[index],
+    ];
+    queue.value = updated;
+}
 
-    return {
-        fileName: audioRta.fileName.value,
-        sampleRate: audioRta.sampleRate.value,
-        bitDepth: "32-bit Float",
-        duration: audioRta.duration.value,
-        fftSize: audioRta.fftSize.value,
-        bufferSize: audioRta.fftSize.value / 2,
-        frequencyBins: audioRta.fftSize.value / 2,
-        bands: audioRta.numBands.value,
-        freqResolution: (
-            audioRta.sampleRate.value / audioRta.fftSize.value
-        ).toFixed(2),
-        avgDb: avgDb.toFixed(1),
-        peakDb: maxDb.toFixed(1),
-        floorDb: minDb.toFixed(1),
-        dynamicRange: dynamicRange.toFixed(1),
-        rmsDb: rmsDb.toFixed(1),
-        bandsLength: bands.value.length,
-        dataLength: bandData.value ? bandData.value.length : 0,
-        peakDataLength: peakData.value ? peakData.value.length : 0,
-    };
-});
+async function handleSelectTrack(trackId: string) {
+    if (currentTrack.value?.id === trackId) {
+        if (audioRta.isPlaying.value) {
+            audioRta.pause();
+        } else {
+            await audioRta.play();
+        }
+        return;
+    }
+
+    const queueIndex = queue.value.findIndex((track) => track.id === trackId);
+    const historyIndex = history.value.findIndex(
+        (track) => track.id === trackId,
+    );
+    const selected =
+        queueIndex >= 0
+            ? queue.value.splice(queueIndex, 1)[0]
+            : historyIndex >= 0
+              ? history.value.splice(historyIndex, 1)[0]
+              : null;
+
+    if (!selected) return;
+    if (currentTrack.value) {
+        pushToHistory(currentTrack.value);
+    }
+
+    await setCurrentTrack(selected, true);
+}
+
+async function handleNextTrack() {
+    const next = queue.value.shift();
+    if (!next) return;
+    if (currentTrack.value) {
+        pushToHistory(currentTrack.value);
+    }
+    await setCurrentTrack(next, true);
+}
+
+async function handlePreviousTrack() {
+    const previous = history.value.shift();
+    if (!previous) return;
+    if (currentTrack.value) {
+        queue.value.unshift({ ...currentTrack.value, status: "upcoming" });
+    }
+    await setCurrentTrack(previous, true);
+}
+
+watch(
+    () => audioRta.endedSignal.value,
+    () => {
+        void handleNextTrack();
+    },
+);
 </script>
 
 <template>
@@ -461,7 +613,6 @@ const stats = computed(() => {
                             @update-peak-decay="handleUpdatePeakDecay"
                             @update-num-bands="handleUpdateNumBands"
                             @update-display-mode="handleUpdateDisplayMode"
-                            @stats-toggle="showStats = !showStats"
                         />
 
                         <!-- Composant Contrôles Spectrogramme -->
@@ -486,85 +637,28 @@ const stats = computed(() => {
                 </div>
             </transition>
 
-            <!-- Panneau Stats -->
+            <!-- Panneau Playlist -->
             <transition
                 enter-active-class="transition duration-300 ease-out"
-                enter-from-class="opacity-0 scale-95"
-                enter-to-class="opacity-100 scale-100"
+                enter-from-class="opacity-0 translate-x-4"
+                enter-to-class="opacity-100 translate-x-0"
                 leave-active-class="transition duration-200 ease-in"
-                leave-from-class="opacity-100 scale-100"
-                leave-to-class="opacity-0 scale-95"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 translate-x-4"
             >
-                <div
-                    v-if="showStats && stats"
-                    ref="statsPanelRef"
-                    class="absolute md:fixed z-20 inset-0 md:inset-auto pointer-events-auto bg-[#1a1a2e]/95 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col w-full h-full md:h-auto md:w-full md:max-w-2xl md:border-2 md:border-white/20 md:rounded-3xl"
-                    :style="
-                        !isMobile
-                            ? {
-                                  left: statsPanelPosition.x + 'px',
-                                  top: statsPanelPosition.y + 'px',
-                                  cursor: isDraggingStats
-                                      ? 'grabbing'
-                                      : 'default',
-                              }
-                            : {}
-                    "
-                >
-                    <div
-                        @mousedown="startDragStats"
-                        @touchstart="startDragStats"
-                        class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
-                        :style="{
-                            cursor: isMobile
-                                ? 'default'
-                                : isDraggingStats
-                                  ? 'grabbing'
-                                  : 'grab',
-                        }"
-                    >
-                        <h2
-                            class="text-sm font-bold uppercase tracking-[0.2em] text-gray-300"
-                        >
-                            Statistiques
-                        </h2>
-                        <button
-                            @click="showStats = false"
-                            class="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-3 py-1 hover:bg-white/10 rounded-lg"
-                            title="Fermer"
-                        >
-                            ×
-                        </button>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto p-4">
-                        <div
-                            class="grid grid-cols-2 gap-x-5 gap-y-3 font-mono text-[11px]"
-                        >
-                            <div
-                                v-for="(val, label) in {
-                                    Fichier: stats.fileName,
-                                    'Fréq. Échantillonnage':
-                                        stats.sampleRate + 'Hz',
-                                    'Niveau de Crête': stats.peakDb + 'dB',
-                                    RMS: stats.rmsDb + 'dB',
-                                    FFT: stats.fftSize,
-                                    Bandes: stats.bands,
-                                    Dynamique: stats.dynamicRange + 'dB',
-                                }"
-                                :key="label"
-                                class="flex flex-col border-l-2 border-white/20 pl-4"
-                            >
-                                <span class="text-gray-500 mb-1">{{
-                                    label
-                                }}</span>
-                                <span class="text-white truncate">{{
-                                    val
-                                }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PlaylistPanel
+                    v-if="showPlaylist"
+                    :current-track="currentTrack"
+                    :queue="queue"
+                    :history="history"
+                    :is-playing="audioRta.isPlaying.value"
+                    :band-data="bandData"
+                    :min-db="audioRta.minDb.value"
+                    :max-db="audioRta.maxDb.value"
+                    @close="showPlaylist = false"
+                    @select-track="handleSelectTrack"
+                    @move-queue-track="moveQueueTrack"
+                />
             </transition>
         </div>
 
@@ -573,15 +667,21 @@ const stats = computed(() => {
             :is-loaded="audioRta.isLoaded.value"
             :current-time="audioRta.currentTime.value"
             :duration="audioRta.duration.value"
-            :file-name="audioRta.fileName.value"
+            :current-track="currentTrack"
+            :queue="queue"
+            :history="history"
             :volume="audioRta.volume.value"
-            @file-selected="handleFileSelected"
+            @files-selected="handleFilesSelected"
             @play="handlePlay"
             @pause="handlePause"
             @stop="handleStop"
             @seek="handleSeek"
+            @next="handleNextTrack"
+            @previous="handlePreviousTrack"
+            @select-track="handleSelectTrack"
+            @move-queue-track="moveQueueTrack"
             @toggle-settings="showSettings = !showSettings"
-            @toggle-stats="showStats = !showStats"
+            @toggle-playlist="showPlaylist = !showPlaylist"
             @volume-change="handleVolumeChange"
         />
     </div>

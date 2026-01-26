@@ -33,7 +33,6 @@ let resizeObserver: ResizeObserver | null = null;
 // Ratio de pixels pour un rendu net
 const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
-// Convertit la position X en fréquence (logarithmique)
 function xToFreq(
     x: number,
     width: number,
@@ -54,7 +53,6 @@ function formatFrequency(freq: number): string {
     return `${Math.round(freq)}Hz`;
 }
 
-// Initialise la taille du canvas
 function updateCanvasSize() {
     if (!containerRef.value || !canvasRef.value) return;
 
@@ -106,7 +104,7 @@ function doRender() {
 
     renderRta(ctx, config, props.bands, bandData, peakData);
 
-    // Dessine la ligne de la fréquence survolée et sa valeur
+    // Ligne verticale de fréquence
     if (
         isHovering.value &&
         mouseX.value !== null &&

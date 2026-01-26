@@ -19,14 +19,12 @@ interface RenderCache {
   barGradient: CanvasGradient | null;
   lineGradient: CanvasGradient | null;
 
-  // Clés d'invalidation du cache
   lastWidth: number;
   lastHeight: number;
   lastMinFreq: number;
   lastMaxFreq: number;
   lastBandsLength: number;
 
-  // Valeurs de l'échelle logarithmique
   logMin: number;
   logMax: number;
   logRange: number;
@@ -223,7 +221,6 @@ export function renderGrid(
 
   ctx.stroke();
 
-  // Texte
   ctx.font = "10px sans-serif";
   ctx.fillStyle = RTA_COLORS.gridText;
 

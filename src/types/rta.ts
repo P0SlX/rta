@@ -58,15 +58,12 @@ export interface RtaRenderConfig {
   cursorPosition: number;
 }
 
-// Marqueurs de fréquence pour la grille (Hz)
 export const FREQUENCY_MARKERS = [
   20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000,
 ];
 
-// Marqueurs de dB pour la grille
 export const DB_MARKERS = [-90, -80, -70, -60, -50, -40, -30, -20, -10, 0];
 
-// Couleurs pour le rendu
 export const RTA_COLORS = {
   background: "#1a1a2e",
   gridLine: "rgba(255, 255, 255, 0.1)",
