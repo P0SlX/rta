@@ -122,7 +122,6 @@ function doRender(timestamp: number) {
     );
 
     if (isHovering.value && mousePos.value && hoverFrequency.value !== null) {
-        const x = mousePos.value.x;
         const y = mousePos.value.y;
 
         ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";

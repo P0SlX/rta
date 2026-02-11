@@ -9,6 +9,13 @@ lerna-debug.log*
 dist
 dist-ssr
 *.local
+wasm/metadata/*.wasm
+wasm/metadata/*.js
+wasm/metadata/*.d.ts
+wasm/metadata/*.ts
+wasm/metadata/package.json
+wasm/metadata/README.md
+wasm/metadata/target
 
 node_modules
 

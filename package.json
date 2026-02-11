@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm wasm:build",
     "dev": "vite",
+    "prebuild": "pnpm wasm:build:release",
     "build": "vue-tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "wasm:build": "wasm-pack build wasm/metadata --target web --no-opt --out-dir ../../src/wasm/metadata --out-name rta_metadata_wasm",
+    "wasm:build:release": "wasm-pack build wasm/metadata --release --target web --no-opt --out-dir ../../src/wasm/metadata --out-name rta_metadata_wasm"
   },
   "dependencies": {
-    "vue": "^3.5.26",
-    "music-metadata": "^10.7.1"
+    "vue": "^3.5.26"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -18,6 +21,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vue-tsc": "^3.2.2"
+    "vue-tsc": "^3.2.2",
+    "wasm-pack": "^0.13.0"
   }
 }

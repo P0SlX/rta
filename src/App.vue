@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { parseBlob } from "music-metadata";
 import {
     onMounted,
     onUnmounted,
@@ -24,6 +23,12 @@ import type {
     FrequencyScale,
     RtaBand,
 } from "./types/rta";
+import {
+    parseMetadataBatch,
+    parseMetadataFromFile,
+    type MetadataResult,
+} from "./utils/metadataParser";
+import { ensureMetadataWasmLoaded } from "./utils/metadataWasmLoader";
 
 const audioRta = useAudioRta();
 
@@ -125,6 +130,7 @@ const bands = shallowRef<RtaBand[]>([]);
 const queue = ref<PlaylistTrack[]>([]);
 const history = ref<PlaylistTrack[]>([]);
 const currentTrack = ref<PlaylistTrack | null>(null);
+const isLoadingTracks = ref(false);
 
 let bandDataBuffer: Float32Array | null = null;
 let peakDataBuffer: Float32Array | null = null;
@@ -195,6 +201,34 @@ function revokeAllCoverUrls() {
     coverUrlRegistry.clear();
 }
 
+const COVER_MAX_SIZE = 256;
+
+async function downsizeCover(data: Uint8Array, mime: string): Promise<Blob> {
+    const copy = new Uint8Array(data.length);
+    copy.set(data);
+    const sourceBlob = new Blob([copy.buffer], { type: mime || "image/jpeg" });
+
+    const bitmap = await createImageBitmap(sourceBlob);
+    const { width, height } = bitmap;
+
+    // Déjà à une taille raisonnable, pas besoin de redimensionner
+    if (width <= COVER_MAX_SIZE && height <= COVER_MAX_SIZE) {
+        bitmap.close();
+        return sourceBlob;
+    }
+
+    const scale = Math.min(COVER_MAX_SIZE / width, COVER_MAX_SIZE / height);
+    const dw = Math.round(width * scale);
+    const dh = Math.round(height * scale);
+
+    const canvas = new OffscreenCanvas(dw, dh);
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(bitmap, 0, 0, dw, dh);
+    bitmap.close();
+
+    return canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+}
+
 watch(
     () => audioRta.isLoaded.value,
     (loaded) => {
@@ -246,76 +280,138 @@ function createBaseTrack(
     };
 }
 
+const LOSSY_FORMATS = new Set([
+    "mp3",
+    "mpeg",
+    "aac",
+    "ogg",
+    "opus",
+    "vorbis",
+    "wma",
+    "m4a",
+]);
+
+function resolveFormatName(
+    mimeType?: string,
+    fileName?: string,
+): string | undefined {
+    const extension = fileName?.split(".").pop()?.trim().toLowerCase();
+    const raw = mimeType || extension;
+    if (!raw) return undefined;
+    return String(raw)
+        .replace(/^audio\//, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function isLossyFormat(format?: string): boolean {
+    if (!format) return false;
+    return LOSSY_FORMATS.has(format.toLowerCase());
+}
+
 function buildFormatLabel(
     format?: string,
     bitDepth?: number,
     sampleRate?: number,
     fileName?: string,
+    bitrate?: number,
 ): string | undefined {
-    const extension = fileName?.split(".").pop()?.trim();
-    const normalizedFormat =
-        format || extension
-            ? String(format || extension)
-                  .replace(/^audio\//, "")
-                  .replace(/\s+/g, " ")
-                  .trim()
-            : undefined;
+    const resolved = resolveFormatName(format, fileName);
     const parts: string[] = [];
-    if (normalizedFormat) parts.push(normalizedFormat.toUpperCase());
-    if (bitDepth) parts.push(`${bitDepth} bits`);
+
+    if (resolved) parts.push(resolved.toUpperCase());
+
+    // On affiche le bitrate pour les formats avec perte, pour ceux sans perte, on affiche le bitDepth
+    if (isLossyFormat(resolved) && bitrate) {
+        parts.push(`${bitrate} kbps`);
+    } else if (bitDepth) {
+        parts.push(`${bitDepth} bits`);
+    }
+
     if (sampleRate) {
         const khz = (sampleRate / 1000).toFixed(1).replace(/\.0$/, "");
-        parts.push(`${khz}Khz`);
+        parts.push(`${khz} kHz`);
     }
-    return parts.length ? parts.join(" - ") : undefined;
+    return parts.length ? parts.join(" – ") : undefined;
 }
 
-async function enrichTrackWithMetadata(
+async function applyMetadataToTrack(
     track: PlaylistTrack,
+    metadata: MetadataResult,
 ): Promise<PlaylistTrack> {
-    if (!track.file) return track;
-    try {
-        const metadata = await parseBlob(track.file);
-        const common = metadata.common;
-        const format = metadata.format;
+    const title = metadata.title?.trim() || track.title;
+    const artist = metadata.artist?.trim() || track.artist;
+    const album = metadata.album?.trim();
 
-        const title = common.title?.trim() || track.title;
-        const artist = common.artist?.trim() || track.artist;
-        const album = common.album?.trim();
-
-        let coverUrl = track.coverUrl;
-        const picture = common.picture?.[0];
-        if (picture?.data) {
-            revokeCoverUrl(coverUrl);
-            const blob = new Blob([picture.data as BlobPart], {
-                type: picture.format || "image/jpeg",
-            });
+    let coverUrl = track.coverUrl;
+    const coverData = metadata.coverData;
+    if (coverData && coverData.length) {
+        revokeCoverUrl(coverUrl);
+        try {
+            const blob = await downsizeCover(
+                coverData,
+                metadata.coverMime || "image/jpeg",
+            );
             coverUrl = URL.createObjectURL(blob);
             registerCoverUrl(coverUrl);
+        } catch {
+            // Décodage/resize a fail, on affiche la cover de fallback
         }
+    }
 
-        const bitDepth = format.bitsPerSample;
-        const sampleRate = format.sampleRate;
-        const formatLabel = buildFormatLabel(
-            format.container || format.codec || track.file.type,
-            bitDepth,
-            sampleRate,
-            track.file?.name,
+    const sampleRate = metadata.sampleRate ?? track.sampleRate;
+    const bitDepth = metadata.bitDepth ?? track.bitDepth;
+    const bitrate = metadata.bitrate;
+
+    const formatLabel = buildFormatLabel(
+        track.file?.type,
+        bitDepth,
+        sampleRate,
+        track.file?.name,
+        bitrate,
+    );
+
+    return {
+        ...track,
+        title,
+        artist,
+        album,
+        coverUrl,
+        sampleRate,
+        bitDepth,
+        formatLabel,
+    };
+}
+
+async function enrichTracksWithMetadataBatch(
+    tracks: PlaylistTrack[],
+): Promise<PlaylistTrack[]> {
+    const files = tracks
+        .map((track) => track.file)
+        .filter((file): file is File => Boolean(file));
+
+    if (!files.length) return tracks;
+
+    try {
+        await ensureMetadataWasmLoaded();
+        const coreCount =
+            typeof navigator !== "undefined" && navigator.hardwareConcurrency
+                ? navigator.hardwareConcurrency
+                : 4;
+        const batchSize = Math.max(4, Math.min(16, coreCount * 2));
+        const metadataList = await parseMetadataBatch(files, { batchSize });
+
+        let index = 0;
+        return Promise.all(
+            tracks.map((track) => {
+                if (!track.file) return Promise.resolve(track);
+                const metadata = metadataList[index++] || {};
+                return applyMetadataToTrack(track, metadata);
+            }),
         );
-
-        return {
-            ...track,
-            title,
-            artist,
-            album,
-            coverUrl,
-            bitDepth,
-            sampleRate,
-            formatLabel,
-        };
     } catch (error) {
         console.warn("Metadata parsing failed:", error);
-        return track;
+        return tracks;
     }
 }
 
@@ -344,18 +440,46 @@ async function setCurrentTrack(track: PlaylistTrack, autoplay = false) {
 }
 
 async function handleFilesSelected(files: File[]) {
+    if (!files.length) return;
+
     const baseTracks = files.map((file) => createBaseTrack(file, "upcoming"));
-    const newTracks = await Promise.all(
-        baseTracks.map((track) => enrichTrackWithMetadata(track)),
-    );
 
-    queue.value.push(...newTracks);
+    // En prio, on va enrichir la première piste pour que ca s'affiche le plus vite possible
+    // ensuite on fera le reste en tache de fond
+    if (baseTracks.length > 0 && baseTracks[0].file) {
+        try {
+            await ensureMetadataWasmLoaded();
+            const firstMetadata = await parseMetadataFromFile(
+                baseTracks[0].file,
+            );
+            const firstEnriched = await applyMetadataToTrack(
+                baseTracks[0],
+                firstMetadata,
+            );
+            queue.value.push(firstEnriched);
 
-    if (!currentTrack.value) {
-        const next = queue.value.shift();
-        if (next) {
-            await setCurrentTrack(next, false);
+            if (!currentTrack.value) {
+                const next = queue.value.shift();
+                if (next) {
+                    void setCurrentTrack(next, false);
+                }
+            }
+        } catch (error) {
+            console.warn("First track metadata parsing failed:", error);
+            queue.value.push(baseTracks[0]);
         }
+    }
+
+    if (baseTracks.length > 1) {
+        const remainingTracks = baseTracks.slice(1);
+        isLoadingTracks.value = true;
+        void enrichTracksWithMetadataBatch(remainingTracks)
+            .then((enrichedTracks) => {
+                queue.value.push(...enrichedTracks);
+            })
+            .finally(() => {
+                isLoadingTracks.value = false;
+            });
     }
 }
 
@@ -645,6 +769,7 @@ watch(
                     :queue="queue"
                     :history="history"
                     :is-playing="audioRta.isPlaying.value"
+                    :is-loading-tracks="isLoadingTracks"
                     :band-data="bandData"
                     :min-db="audioRta.minDb.value"
                     :max-db="audioRta.maxDb.value"
