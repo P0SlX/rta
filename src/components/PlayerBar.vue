@@ -95,7 +95,7 @@ function handleSeek(event: Event) {
             <!-- Section track -->
             <div class="flex items-center gap-3 min-w-0 lg:w-1/3">
                 <div
-                    class="h-20 w-20 rounded-xl bg-linear-to-br from-[#00c896]/30 to-white/5 flex items-center justify-center text-xs text-white/70 font-bold uppercase overflow-hidden"
+                    class="h-20 w-20 shrink-0 rounded-xl bg-linear-to-br from-[#00c896]/30 to-white/5 flex items-center justify-center text-xs text-white/70 font-bold uppercase overflow-hidden"
                 >
                     <img
                         :src="props.currentTrack?.coverUrl || fallbackCoverUrl"
@@ -137,14 +137,14 @@ function handleSeek(event: Event) {
             <div class="flex flex-col items-center gap-3 lg:w-1/3">
                 <div class="flex items-center gap-3">
                     <button
-                        class="p-2 text-white/80 hover:text-white"
+                        class="p-2 text-white/80 hover:text-white cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         :disabled="!isPlayable || !history.length"
                         @click="emit('previous')"
                         title="Piste précédente"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5"
+                            class="h-6 w-6"
                             viewBox="0 0 24 24"
                             fill="currentColor"
                         >
@@ -155,7 +155,7 @@ function handleSeek(event: Event) {
                     </button>
 
                     <button
-                        class="p-2 md:p-3 bg-[#00c896] hover:bg-[#00daa8] text-black rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-11 h-11 cursor-pointer"
+                        class="bg-[#00c896] hover:bg-[#00daa8] text-gray-900 rounded-full transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-[#00c896]/10 flex items-center justify-center w-11 h-11 cursor-pointer"
                         :disabled="!isPlayable"
                         @click="showPause ? emit('pause') : emit('play')"
                         title="Lecture / Pause"
@@ -163,7 +163,7 @@ function handleSeek(event: Event) {
                         <svg
                             v-if="showPause"
                             xmlns="http://www.w3.org/2000/svg"
-                            class="h-6 w-6"
+                            class="h-full w-full"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -178,27 +178,25 @@ function handleSeek(event: Event) {
                         <svg
                             v-else
                             xmlns="http://www.w3.org/2000/svg"
-                            class="h-6 w-6 ml-0.5"
+                            class="h-full w-full"
                             viewBox="0 0 20 20"
                             fill="currentColor"
                         >
                             <path
-                                fill-rule="evenodd"
-                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                                clip-rule="evenodd"
+                                d="M9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
                             />
                         </svg>
                     </button>
 
                     <button
-                        class="p-2 text-white/80 hover:text-white"
+                        class="p-2 text-white/80 hover:text-white cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         :disabled="!isPlayable || !queue.length"
                         @click="emit('next')"
                         title="Piste suivante"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5"
+                            class="h-6 w-6"
                             viewBox="0 0 24 24"
                             fill="currentColor"
                         >
@@ -239,7 +237,7 @@ function handleSeek(event: Event) {
 
                         <div
                             v-if="isPlayable"
-                            class="absolute h-3.5 w-3.5 bg-white rounded-full shadow pointer-events-none transition-[left,transform] duration-150 ease-linear group-hover:scale-125"
+                            class="absolute h-3.5 w-3.5 bg-white rounded-full shadow pointer-events-none transition-[left,transform] duration-150 ease-linear"
                             :style="{
                                 left: seekPosition + '%',
                                 transform: 'translateX(-50%)',
@@ -257,7 +255,10 @@ function handleSeek(event: Event) {
                 class="flex items-center justify-between gap-4 lg:w-1/3 lg:justify-end"
             >
                 <button
-                    class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 cursor-pointer relative"
+                    class="p-2 text-white cursor-pointer relative transition-transform"
+                    :class="{
+                        'animate-pulse animate-scale-pulse': !isPlayable,
+                    }"
                     @click="openFileDialog"
                     title="Ajouter des pistes"
                 >
@@ -276,6 +277,7 @@ function handleSeek(event: Event) {
                         />
                     </svg>
                 </button>
+
                 <VolumeSlider
                     class="hidden md:block"
                     :volume="volume"
@@ -283,7 +285,8 @@ function handleSeek(event: Event) {
                 />
 
                 <button
-                    class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 cursor-pointer relative"
+                    class="p-2 text-white cursor-pointer relative disabled:opacity-30 disabled:cursor-not-allowed"
+                    :disabled="!isPlayable"
                     @click="emit('togglePlaylist')"
                     title="File d'attente"
                 >
@@ -310,7 +313,7 @@ function handleSeek(event: Event) {
                 </button>
 
                 <button
-                    class="p-2 md:p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 group cursor-pointer"
+                    class="p-2 text-white group cursor-pointer"
                     @click="emit('toggleSettings')"
                     title="Réglages"
                 >
@@ -338,3 +341,19 @@ function handleSeek(event: Event) {
         </div>
     </div>
 </template>
+
+<style scoped>
+@keyframes scale-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.25);
+    }
+}
+
+.animate-scale-pulse {
+    animation: scale-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+</style>

@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import type {
-    ColorMap,
-    FrequencyScale,
-    RtaBand,
-    SpectrogramDirection,
-} from "../types/rta";
+import type { ColorMap, FrequencyScale, RtaBand } from "../types/rta";
 import {
     renderSpectrogram,
     renderSpectrogramColumn,
@@ -20,7 +15,6 @@ const props = defineProps<{
     isPlaying: boolean;
     colorMap: ColorMap;
     frequencyScale: FrequencyScale;
-    direction: SpectrogramDirection;
     gamma: number;
     columnInterval: number;
 }>();
@@ -122,7 +116,6 @@ function doRender(timestamp: number) {
         height,
         props.minDb,
         true,
-        props.direction,
         props.frequencyScale,
         minFreq,
         maxFreq,
@@ -137,13 +130,8 @@ function doRender(timestamp: number) {
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
 
-        if (props.direction === "horizontal") {
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-        } else {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-        }
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
 
         ctx.stroke();
         ctx.setLineDash([]);
@@ -158,19 +146,11 @@ function doRender(timestamp: number) {
         let labelX: number;
         let labelY: number;
 
-        if (props.direction === "horizontal") {
-            labelY = y - 30;
-            if (labelY < textHeight + padding) {
-                labelY = y + 20;
-            }
-            labelX = width - textWidth - padding * 2 - 10;
-        } else {
-            labelX = x + 10;
-            if (labelX + textWidth + padding * 2 > width) {
-                labelX = x - textWidth - padding * 2 - 10;
-            }
-            labelY = 20;
+        labelY = y - 30;
+        if (labelY < textHeight + padding) {
+            labelY = y + 20;
         }
+        labelX = width - textWidth - padding * 2 - 10;
 
         ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
         ctx.fillRect(
@@ -225,23 +205,13 @@ function handleMouseMove(event: MouseEvent) {
 
     mousePos.value = { x, y };
 
-    if (props.direction === "horizontal") {
-        hoverFrequency.value = posToFreq(
-            y,
-            canvasHeight.value,
-            minFreq,
-            maxFreq,
-            props.frequencyScale,
-        );
-    } else {
-        hoverFrequency.value = posToFreq(
-            canvasWidth.value - x,
-            canvasWidth.value,
-            minFreq,
-            maxFreq,
-            props.frequencyScale,
-        );
-    }
+    hoverFrequency.value = posToFreq(
+        y,
+        canvasHeight.value,
+        minFreq,
+        maxFreq,
+        props.frequencyScale,
+    );
 
     isHovering.value = true;
 }

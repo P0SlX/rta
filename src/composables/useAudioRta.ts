@@ -39,10 +39,10 @@ const linearToDbLUT = new Float64Array(LUT_SIZE);
 })();
 
 const DEFAULT_PARAMS: Readonly<RtaParams> = Object.freeze({
-  fftSize: 8192,
-  smoothingTimeConstant: 0.8,
+  fftSize: 16384,
+  smoothingTimeConstant: 0.75,
   extraSmoothing: 0.3,
-  peakHold: true,
+  peakHold: false,
   peakDecay: 0.98,
   minDb: -100,
   maxDb: 0,

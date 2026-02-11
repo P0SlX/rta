@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import fallbackCoverUrl from "../assets/fallback-cover.svg";
 import type { PlaylistTrack } from "../types/playlist";
 
@@ -33,82 +33,85 @@ function moveTrackUp(trackId: string) {
 function moveTrackDown(trackId: string) {
     emit("moveQueueTrack", trackId, "down");
 }
+/**
+ * Mini visualizer désactivé car l'animation ne me plait pas...
+ */
 
-const MINI_BAR_COUNT = 6;
-const MINI_BAR_MIN = 2;
-const MINI_BAR_MAX = 20;
-const MINI_DB_MIN = -100;
-const MINI_DB_MAX = 0;
+// const MINI_BAR_COUNT = 6;
+// const MINI_BAR_MIN = 2;
+// const MINI_BAR_MAX = 20;
+// const MINI_DB_MIN = -100;
+// const MINI_DB_MAX = 0;
 
-const miniBars = ref<number[]>([]);
-let miniFrameId: number | null = null;
+// const miniBars = ref<number[]>([]);
+// let miniFrameId: number | null = null;
 
-function computeMiniBars(data: Float32Array, minDb: number, maxDb: number) {
-    const range = maxDb - minDb || 1;
-    const result = new Array<number>(MINI_BAR_COUNT);
-    const step = data.length / MINI_BAR_COUNT;
-    for (let i = 0; i < MINI_BAR_COUNT; i += 1) {
-        const index = Math.min(
-            data.length - 1,
-            Math.floor(i * step + step / 2),
-        );
-        const value = data[index];
-        const normalized = (value - minDb) / range;
-        const clamped = Math.min(1, Math.max(0, normalized));
-        result[i] = Math.max(MINI_BAR_MIN, Math.round(clamped * MINI_BAR_MAX));
-    }
-    return result;
-}
+// function computeMiniBars(data: Float32Array, minDb: number, maxDb: number) {
+//     const range = maxDb - minDb || 1;
+//     const result = new Array<number>(MINI_BAR_COUNT);
+//     const step = data.length / MINI_BAR_COUNT;
+//     for (let i = 0; i < MINI_BAR_COUNT; i += 1) {
+//         const index = Math.min(
+//             data.length - 1,
+//             Math.floor(i * step + step / 2),
+//         );
+//         const value = data[index];
+//         const normalized = (value - minDb) / range;
+//         const clamped = Math.min(1, Math.max(0, normalized));
+//         result[i] = Math.max(MINI_BAR_MIN, Math.round(clamped * MINI_BAR_MAX));
+//     }
+//     return result;
+// }
 
-function updateMiniBars() {
-    const data = props.bandData;
-    if (!data || data.length === 0) {
-        miniBars.value = new Array(MINI_BAR_COUNT).fill(MINI_BAR_MIN);
-        return;
-    }
-    const minDb = props.minDb ?? MINI_DB_MIN;
-    const maxDb = props.maxDb ?? MINI_DB_MAX;
-    miniBars.value = computeMiniBars(data, minDb, maxDb);
-}
+// function updateMiniBars() {
+//     const data = props.bandData;
+//     if (!data || data.length === 0) {
+//         miniBars.value = new Array(MINI_BAR_COUNT).fill(MINI_BAR_MIN);
+//         return;
+//     }
+//     const minDb = props.minDb ?? MINI_DB_MIN;
+//     const maxDb = props.maxDb ?? MINI_DB_MAX;
+//     miniBars.value = computeMiniBars(data, minDb, maxDb);
+// }
 
-function startMiniLoop() {
-    if (miniFrameId !== null) return;
-    const tick = () => {
-        updateMiniBars();
-        miniFrameId = requestAnimationFrame(tick);
-    };
-    tick();
-}
+// function startMiniLoop() {
+//     if (miniFrameId !== null) return;
+//     const tick = () => {
+//         updateMiniBars();
+//         miniFrameId = requestAnimationFrame(tick);
+//     };
+//     tick();
+// }
 
-function stopMiniLoop() {
-    if (miniFrameId === null) return;
-    cancelAnimationFrame(miniFrameId);
-    miniFrameId = null;
-}
+// function stopMiniLoop() {
+//     if (miniFrameId === null) return;
+//     cancelAnimationFrame(miniFrameId);
+//     miniFrameId = null;
+// }
 
-watch(
-    () => props.isPlaying,
-    (playing) => {
-        if (playing) {
-            startMiniLoop();
-        } else {
-            stopMiniLoop();
-            miniBars.value = new Array(MINI_BAR_COUNT).fill(MINI_BAR_MIN);
-        }
-    },
-    { immediate: true },
-);
+// watch(
+//     () => props.isPlaying,
+//     (playing) => {
+//         if (playing) {
+//             startMiniLoop();
+//         } else {
+//             stopMiniLoop();
+//             miniBars.value = new Array(MINI_BAR_COUNT).fill(MINI_BAR_MIN);
+//         }
+//     },
+//     { immediate: true },
+// );
 
-onMounted(() => {
-    updateMiniBars();
-    if (props.isPlaying) {
-        startMiniLoop();
-    }
-});
+// onMounted(() => {
+//     updateMiniBars();
+//     if (props.isPlaying) {
+//         startMiniLoop();
+//     }
+// });
 
-onUnmounted(() => {
-    stopMiniLoop();
-});
+// onUnmounted(() => {
+//     stopMiniLoop();
+// });
 
 watch(
     () => props.currentTrack?.id,
@@ -132,7 +135,7 @@ watch(
     >
         <!-- En-tête -->
         <div
-            class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/5 select-none shrink-0"
+            class="px-4 py-2 border-b border-white/10 flex justify-between items-center bg-white/5 select-none shrink-0"
         >
             <h2
                 class="text-sm font-bold uppercase tracking-[0.2em] text-gray-300"
@@ -155,16 +158,6 @@ watch(
         >
             <!-- Déjà écoutés -->
             <div v-if="history.length">
-                <div class="flex items-center justify-between mb-2">
-                    <span
-                        class="text-[11px] uppercase tracking-widest text-gray-500 font-bold"
-                    >
-                        Déjà écoutés
-                    </span>
-                    <span class="text-xs text-gray-400">{{
-                        history.length
-                    }}</span>
-                </div>
                 <div>
                     <div
                         v-for="track in history"
@@ -221,7 +214,7 @@ watch(
                             {{ currentTrack.artist || "Fichier local" }}
                         </p>
                     </div>
-                    <div
+                    <!-- <div
                         v-if="miniBars.length"
                         class="flex items-center gap-1 h-6"
                     >
@@ -235,7 +228,7 @@ watch(
                                 :style="{ height: bar * 2 + 'px' }"
                             ></span>
                         </div>
-                    </div>
+                    </div> -->
                 </div>
             </div>
 
@@ -250,7 +243,7 @@ watch(
                     <div
                         v-for="(track, index) in queue"
                         :key="track.id"
-                        class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors group"
+                        class="flex cursor-pointer items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors group"
                     >
                         <div
                             class="h-10 w-10 rounded-lg overflow-hidden shrink-0"
@@ -264,7 +257,7 @@ watch(
                             />
                         </div>
                         <button
-                            class="flex-1 min-w-0 text-left"
+                            class="flex-1 min-w-0 text-left cursor-pointer"
                             @click="handleTrackClick(track.id)"
                         >
                             <div class="text-sm text-white truncate">
@@ -278,7 +271,7 @@ watch(
                             class="flex flex-col items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                             <button
-                                class="p-1 text-gray-400 hover:text-white disabled:opacity-20"
+                                class="p-1 cursor-pointer text-gray-400 hover:text-white disabled:opacity-20"
                                 :disabled="index === 0"
                                 @click="moveTrackUp(track.id)"
                                 title="Monter"
@@ -297,7 +290,7 @@ watch(
                                 </svg>
                             </button>
                             <button
-                                class="p-1 text-gray-400 hover:text-white disabled:opacity-20"
+                                class="p-1 cursor-pointer text-gray-400 hover:text-white disabled:opacity-20"
                                 :disabled="index === queue.length - 1"
                                 @click="moveTrackDown(track.id)"
                                 title="Descendre"

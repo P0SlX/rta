@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type {
-    ColorMap,
-    FrequencyScale,
-    SpectrogramDirection,
-} from "../types/rta";
+import type { ColorMap, FrequencyScale } from "../types/rta";
 
 const props = defineProps<{
     colorMap: ColorMap;
     frequencyScale: FrequencyScale;
-    direction: SpectrogramDirection;
     gamma: number;
     columnInterval: number;
 }>();
@@ -17,7 +12,6 @@ const props = defineProps<{
 const emit = defineEmits<{
     updateColorMap: [colorMap: ColorMap];
     updateFrequencyScale: [scale: FrequencyScale];
-    updateDirection: [direction: SpectrogramDirection];
     updateGamma: [gamma: number];
     updateColumnInterval: [interval: number];
 }>();
@@ -30,11 +24,6 @@ const colorMapModel = computed({
 const frequencyScaleModel = computed({
     get: () => props.frequencyScale,
     set: (value) => emit("updateFrequencyScale", value),
-});
-
-const directionModel = computed({
-    get: () => props.direction,
-    set: (value) => emit("updateDirection", value),
 });
 
 const gammaModel = computed({
@@ -85,22 +74,6 @@ const columnIntervalModel = computed({
                     >
                         <option value="logarithmic">Logarithmique</option>
                         <option value="linear">Linéaire</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="flex flex-col gap-2">
-                <label
-                    class="text-xs font-bold uppercase tracking-widest text-gray-500"
-                    >Direction</label
-                >
-                <div class="relative">
-                    <select
-                        v-model="directionModel"
-                        class="w-full bg-white/5 text-white border border-white/10 rounded-xl px-3 py-2 appearance-none focus:border-[#00c896] focus:outline-none transition-all cursor-pointer hover:bg-white/10"
-                    >
-                        <option value="horizontal">Horizontal</option>
-                        <option value="vertical">Vertical</option>
                     </select>
                 </div>
             </div>

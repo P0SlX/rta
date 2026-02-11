@@ -99,7 +99,7 @@ function handleMouseUp() {
         </transition>
 
         <button
-            class="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/5 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            class="p-2 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
             :disabled="disabled"
             @click="toggleMute"
             :title="volume > 0 ? 'Couper le son' : 'Activer le son'"

@@ -15,7 +15,6 @@ export const MAX_BANDS = 14844;
 export interface SpectrogramParams {
   colorMap: ColorMap;
   frequencyScale: FrequencyScale;
-  direction: SpectrogramDirection;
   gamma: number;
   columnInterval: number;
 }
@@ -33,8 +32,6 @@ export type ColorMap =
   | "custom";
 
 export type FrequencyScale = "logarithmic" | "linear";
-
-export type SpectrogramDirection = "horizontal" | "vertical";
 
 export interface RtaBand {
   freqStart: number;

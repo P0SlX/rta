@@ -28,14 +28,6 @@ const isSpectrogramMode = computed(() => props.displayMode === "spectrogram");
 
 const fftSizes: FftSize[] = [512, 1024, 2048, 4096, 8192, 16384, 32768];
 
-const hzPerBin = computed(() => props.sampleRate / props.fftSize);
-const usableBins = computed(() => {
-    const minFreq = 20;
-    const maxFreq = Math.min(20000, props.sampleRate / 2);
-    return Math.floor((maxFreq - minFreq) / hzPerBin.value);
-});
-const isOversampled = computed(() => props.numBands > usableBins.value);
-
 const displayModeModel = computed({
     get: () => props.displayMode,
     set: (value) => emit("updateDisplayMode", value),
@@ -132,35 +124,18 @@ const peakHoldModel = computed({
                         class="text-xs font-bold uppercase tracking-widest text-gray-500"
                         >Nombre de Bandes</label
                     >
-                    <span
-                        class="font-mono text-sm font-bold"
-                        :class="
-                            isOversampled ? 'text-orange-400' : 'text-[#00c896]'
-                        "
-                        >{{ numBandsModel }}</span
-                    >
+                    <span class="font-mono text-sm font-bold text-[#00c896]">
+                        {{ numBandsModel }}
+                    </span>
                 </div>
                 <input
                     v-model.number="numBandsModel"
                     type="range"
                     min="16"
-                    max="14844"
+                    max="128"
                     step="16"
                     class="w-full h-2 appearance-none bg-white/5 rounded-full cursor-pointer accent-[#00c896]"
                 />
-                <div
-                    class="text-[10px] font-mono text-gray-500 flex justify-between"
-                >
-                    <span>{{ hzPerBin.toFixed(2) }} Hz/bin</span>
-                    <span>{{ usableBins }} bins utiles</span>
-                </div>
-                <div
-                    class="text-[10px] text-orange-400/80 mt-1"
-                    :class="{ invisible: !isOversampled }"
-                >
-                    Bandes > bins : plusieurs bandes partagent les mêmes
-                    données. Augmentez la FFT.
-                </div>
             </div>
 
             <!-- Lissage de l'analyseur -->
@@ -223,7 +198,7 @@ const peakHoldModel = computed({
                     </label>
                     <span
                         v-if="peakHoldModel"
-                        class="text-[#00c896] font-mono text-sm font-bold"
+                        class="text-[#00c896] font-mono text-sm font-bold ml-4"
                         >{{ peakDecayModel.toFixed(3) }}</span
                     >
                 </div>

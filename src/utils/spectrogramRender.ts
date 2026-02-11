@@ -3,7 +3,6 @@ import {
   RTA_COLORS,
   type ColorMap,
   type FrequencyScale,
-  type SpectrogramDirection,
 } from "../types/rta";
 
 const SPECTROGRAM_WIDTH = 2048;
@@ -137,7 +136,6 @@ export function renderSpectrogram(
   height: number,
   minDb: number,
   showGrid: boolean,
-  direction: SpectrogramDirection,
   frequencyScale: FrequencyScale,
   minFreq: number,
   maxFreq: number,
@@ -154,129 +152,59 @@ export function renderSpectrogram(
   const col = writeColumn;
   const visibleCols = Math.min(width, SPECTROGRAM_WIDTH);
 
-  if (direction === "horizontal") {
-    if (col >= visibleCols) {
-      ctx.drawImage(
-        bufferCanvas!,
-        col - visibleCols,
-        0,
-        visibleCols,
-        height,
-        0,
-        0,
-        visibleCols,
-        height,
-      );
-    } else {
-      const oldestCol =
-        (col + SPECTROGRAM_WIDTH - visibleCols) % SPECTROGRAM_WIDTH;
-      const rightWidth = SPECTROGRAM_WIDTH - oldestCol;
-
-      if (rightWidth >= visibleCols) {
-        ctx.drawImage(
-          bufferCanvas!,
-          oldestCol,
-          0,
-          visibleCols,
-          height,
-          0,
-          0,
-          visibleCols,
-          height,
-        );
-      } else {
-        ctx.drawImage(
-          bufferCanvas!,
-          oldestCol,
-          0,
-          rightWidth,
-          height,
-          0,
-          0,
-          rightWidth,
-          height,
-        );
-        const leftWidth = visibleCols - rightWidth;
-        ctx.drawImage(
-          bufferCanvas!,
-          0,
-          0,
-          leftWidth,
-          height,
-          rightWidth,
-          0,
-          leftWidth,
-          height,
-        );
-      }
-    }
+  if (col >= visibleCols) {
+    ctx.drawImage(
+      bufferCanvas!,
+      col - visibleCols,
+      0,
+      visibleCols,
+      height,
+      0,
+      0,
+      visibleCols,
+      height,
+    );
   } else {
-    const visibleRows = Math.min(height, SPECTROGRAM_WIDTH);
+    const oldestCol =
+      (col + SPECTROGRAM_WIDTH - visibleCols) % SPECTROGRAM_WIDTH;
+    const rightWidth = SPECTROGRAM_WIDTH - oldestCol;
 
-    if (col >= visibleRows) {
-      ctx.save();
-      ctx.translate(width, 0);
-      ctx.rotate(Math.PI / 2);
+    if (rightWidth >= visibleCols) {
       ctx.drawImage(
         bufferCanvas!,
-        col - visibleRows,
+        oldestCol,
         0,
-        visibleRows,
-        bufferHeight,
+        visibleCols,
+        height,
         0,
         0,
-        visibleRows,
-        width,
+        visibleCols,
+        height,
       );
-      ctx.restore();
     } else {
-      const oldestCol =
-        (col + SPECTROGRAM_WIDTH - visibleRows) % SPECTROGRAM_WIDTH;
-      const rightWidth = SPECTROGRAM_WIDTH - oldestCol;
-
-      ctx.save();
-      ctx.translate(width, 0);
-      ctx.rotate(Math.PI / 2);
-
-      if (rightWidth >= visibleRows) {
-        ctx.drawImage(
-          bufferCanvas!,
-          oldestCol,
-          0,
-          visibleRows,
-          bufferHeight,
-          0,
-          0,
-          visibleRows,
-          width,
-        );
-      } else {
-        ctx.drawImage(
-          bufferCanvas!,
-          oldestCol,
-          0,
-          rightWidth,
-          bufferHeight,
-          0,
-          0,
-          rightWidth,
-          width,
-        );
-        const leftWidth = visibleRows - rightWidth;
-        ctx.drawImage(
-          bufferCanvas!,
-          0,
-          0,
-          leftWidth,
-          bufferHeight,
-          0,
-          rightWidth,
-          leftWidth,
-          width,
-        );
-      }
-
-      ctx.restore();
+      ctx.drawImage(
+        bufferCanvas!,
+        oldestCol,
+        0,
+        rightWidth,
+        height,
+        0,
+        0,
+        rightWidth,
+        height,
+      );
+      const leftWidth = visibleCols - rightWidth;
+      ctx.drawImage(
+        bufferCanvas!,
+        0,
+        0,
+        leftWidth,
+        height,
+        rightWidth,
+        0,
+        leftWidth,
+        height,
+      );
     }
   }
 
@@ -286,7 +214,6 @@ export function renderSpectrogram(
       width,
       height,
       minDb,
-      direction,
       frequencyScale,
       minFreq,
       maxFreq,
@@ -301,7 +228,6 @@ function renderSpectrogramGrid(
   width: number,
   height: number,
   minDb: number,
-  direction: SpectrogramDirection,
   frequencyScale: FrequencyScale,
   minFreq: number,
   maxFreq: number,
@@ -315,35 +241,18 @@ function renderSpectrogramGrid(
   const logRange = logMax - logMin;
   const linRange = maxFreq - minFreq;
 
-  if (direction === "horizontal") {
-    for (let i = 0; i < FREQ_MARKERS.length; i++) {
-      const freq = FREQ_MARKERS[i];
-      if (freq >= minFreq && freq <= maxFreq) {
-        let normalized: number;
-        if (frequencyScale === "logarithmic") {
-          normalized = (Math.log10(freq) - logMin) / logRange;
-        } else {
-          normalized = (freq - minFreq) / linRange;
-        }
-        const y = height - normalized * height;
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
+  for (let i = 0; i < FREQ_MARKERS.length; i++) {
+    const freq = FREQ_MARKERS[i];
+    if (freq >= minFreq && freq <= maxFreq) {
+      let normalized: number;
+      if (frequencyScale === "logarithmic") {
+        normalized = (Math.log10(freq) - logMin) / logRange;
+      } else {
+        normalized = (freq - minFreq) / linRange;
       }
-    }
-  } else {
-    for (let i = 0; i < FREQ_MARKERS.length; i++) {
-      const freq = FREQ_MARKERS[i];
-      if (freq >= minFreq && freq <= maxFreq) {
-        let normalized: number;
-        if (frequencyScale === "logarithmic") {
-          normalized = (Math.log10(freq) - logMin) / logRange;
-        } else {
-          normalized = (freq - minFreq) / linRange;
-        }
-        const x = normalized * width;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-      }
+      const y = height - normalized * height;
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
     }
   }
 
@@ -352,47 +261,25 @@ function renderSpectrogramGrid(
   ctx.font = "10px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
 
-  if (direction === "horizontal") {
-    ctx.textAlign = "left";
-    for (let i = 0; i < FREQ_MARKERS.length; i++) {
-      const freq = FREQ_MARKERS[i];
-      if (freq >= minFreq && freq <= maxFreq) {
-        let normalized: number;
-        if (frequencyScale === "logarithmic") {
-          normalized = (Math.log10(freq) - logMin) / logRange;
-        } else {
-          normalized = (freq - minFreq) / linRange;
-        }
-        const y = height - normalized * height;
-        if (y > 12 && y < height - 10) {
-          const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
-          ctx.fillText(label, 4, y - 2);
-        }
+  ctx.textAlign = "left";
+  for (let i = 0; i < FREQ_MARKERS.length; i++) {
+    const freq = FREQ_MARKERS[i];
+    if (freq >= minFreq && freq <= maxFreq) {
+      let normalized: number;
+      if (frequencyScale === "logarithmic") {
+        normalized = (Math.log10(freq) - logMin) / logRange;
+      } else {
+        normalized = (freq - minFreq) / linRange;
+      }
+      const y = height - normalized * height;
+      if (y > 12 && y < height - 10) {
+        const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
+        ctx.fillText(label, 4, y - 2);
       }
     }
-    ctx.textAlign = "right";
-    ctx.fillText(`${minDb}dB`, width - 4, height - 4);
-  } else {
-    ctx.textAlign = "center";
-    for (let i = 0; i < FREQ_MARKERS.length; i++) {
-      const freq = FREQ_MARKERS[i];
-      if (freq >= minFreq && freq <= maxFreq) {
-        let normalized: number;
-        if (frequencyScale === "logarithmic") {
-          normalized = (Math.log10(freq) - logMin) / logRange;
-        } else {
-          normalized = (freq - minFreq) / linRange;
-        }
-        const x = normalized * width;
-        if (x > 30 && x < width - 30) {
-          const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
-          ctx.fillText(label, x, height - 4);
-        }
-      }
-    }
-    ctx.textAlign = "left";
-    ctx.fillText(`${minDb}dB`, 4, 12);
   }
+  ctx.textAlign = "right";
+  ctx.fillText(`${minDb}dB`, width - 4, height - 4);
 }
 
 export function clearSpectrogramBuffer(): void {

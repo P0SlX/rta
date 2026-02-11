@@ -23,18 +23,16 @@ import type {
     FftSize,
     FrequencyScale,
     RtaBand,
-    SpectrogramDirection,
 } from "./types/rta";
 
 const audioRta = useAudioRta();
 
-const displayMode = ref<DisplayMode>("bars");
+const displayMode = ref<DisplayMode>("line");
 const showSettings = ref(false);
 const showPlaylist = ref(false);
 
 const spectrogramColorMap = ref<ColorMap>("custom");
 const spectrogramFrequencyScale = ref<FrequencyScale>("logarithmic");
-const spectrogramDirection = ref<SpectrogramDirection>("horizontal");
 const spectrogramGamma = ref(1.0);
 const spectrogramColumnInterval = ref(16);
 
@@ -336,7 +334,7 @@ async function loadTrack(track: PlaylistTrack, autoplay = false) {
 }
 
 function pushToHistory(track: PlaylistTrack) {
-    history.value.unshift({ ...track, status: "played" });
+    history.value.push({ ...track, status: "played" });
 }
 
 async function setCurrentTrack(track: PlaylistTrack, autoplay = false) {
@@ -421,10 +419,6 @@ function handleUpdateSpectrogramFrequencyScale(scale: FrequencyScale) {
     spectrogramFrequencyScale.value = scale;
 }
 
-function handleUpdateSpectrogramDirection(direction: SpectrogramDirection) {
-    spectrogramDirection.value = direction;
-}
-
 function handleUpdateSpectrogramGamma(gamma: number) {
     spectrogramGamma.value = gamma;
 }
@@ -489,7 +483,7 @@ async function handleNextTrack() {
 }
 
 async function handlePreviousTrack() {
-    const previous = history.value.shift();
+    const previous = history.value.pop();
     if (!previous) return;
     if (currentTrack.value) {
         queue.value.unshift({ ...currentTrack.value, status: "upcoming" });
@@ -535,7 +529,6 @@ watch(
                 :is-playing="audioRta.isPlaying.value"
                 :color-map="spectrogramColorMap"
                 :frequency-scale="spectrogramFrequencyScale"
-                :direction="spectrogramDirection"
                 :gamma="spectrogramGamma"
                 :column-interval="spectrogramColumnInterval"
             />
@@ -567,7 +560,7 @@ watch(
                     <div
                         @mousedown="startDrag"
                         @touchstart="startDrag"
-                        class="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
+                        class="px-4 py-2 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
                         :style="{
                             cursor: isMobile
                                 ? 'default'
@@ -577,7 +570,7 @@ watch(
                         }"
                     >
                         <h2
-                            class="text-sm font-bold uppercase tracking-[0.2em] text-gray-300"
+                            class="text-sm font-bold uppercase tracking-widest text-gray-300"
                         >
                             Configuration
                         </h2>
@@ -590,7 +583,9 @@ watch(
                         </button>
                     </div>
 
-                    <div class="flex-1 overflow-y-auto p-4 space-y-5">
+                    <div
+                        class="flex-1 overflow-y-auto px-4 pb-5 pt-3 space-y-5"
+                    >
                         <!-- Composant Contrôles Audio (Curseurs/Réglages) -->
                         <AudioPlayerControls
                             :error="audioRta.error.value"
@@ -620,14 +615,12 @@ watch(
                             v-if="displayMode === 'spectrogram'"
                             :color-map="spectrogramColorMap"
                             :frequency-scale="spectrogramFrequencyScale"
-                            :direction="spectrogramDirection"
                             :gamma="spectrogramGamma"
                             :column-interval="spectrogramColumnInterval"
                             @update-color-map="handleUpdateSpectrogramColorMap"
                             @update-frequency-scale="
                                 handleUpdateSpectrogramFrequencyScale
                             "
-                            @update-direction="handleUpdateSpectrogramDirection"
                             @update-gamma="handleUpdateSpectrogramGamma"
                             @update-column-interval="
                                 handleUpdateSpectrogramColumnInterval
