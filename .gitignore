@@ -8,6 +8,8 @@ lerna-debug.log*
 
 dist
 dist-ssr
+dist-electron
+release
 *.local
 wasm/metadata/*.wasm
 wasm/metadata/*.js

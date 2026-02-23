@@ -1,5 +1,23 @@
 /// <reference types="vite/client" />
 
+interface ElectronAPI {
+  isElectron: boolean;
+  platform: NodeJS.Platform;
+  versions: {
+    electron: string;
+    chrome: string;
+    node: string;
+  };
+  setTitle: (title: string) => void;
+  openFileDialog: () => Promise<string[] | undefined>;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+  }
+}
+
 declare module "*.vue" {
   import type { DefineComponent } from "vue";
   const component: DefineComponent<{}, {}, any>;
