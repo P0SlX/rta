@@ -13,6 +13,8 @@ const props = defineProps<{
     queue: PlaylistTrack[];
     history: PlaylistTrack[];
     volume: number;
+    hasLyrics: boolean;
+    showLyrics: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -26,6 +28,7 @@ const emit = defineEmits<{
     selectTrack: [trackId: string];
     moveQueueTrack: [trackId: string, direction: "up" | "down"];
     toggleSettings: [];
+    toggleLyrics: [];
     togglePlaylist: [];
     volumeChange: [value: number];
 }>();
@@ -283,6 +286,40 @@ function handleSeek(event: Event) {
                     :volume="volume"
                     @volume-change="(value) => emit('volumeChange', value)"
                 />
+
+                <button
+                    class="p-2 cursor-pointer relative transition-colors"
+                    :class="{
+                        'text-[#00c896]': props.showLyrics,
+                        'text-white/80 hover:text-white':
+                            props.hasLyrics && !props.showLyrics,
+                        'text-white/20 cursor-not-allowed': !props.hasLyrics,
+                    }"
+                    :disabled="!props.hasLyrics"
+                    @click="emit('toggleLyrics')"
+                    title="Paroles"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                        />
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2.5"
+                            d="M8 8h0m4 0h0m4 0h0"
+                        />
+                    </svg>
+                </button>
 
                 <button
                     class="p-2 text-white cursor-pointer relative disabled:opacity-30 disabled:cursor-not-allowed"

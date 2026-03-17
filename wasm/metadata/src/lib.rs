@@ -1,6 +1,6 @@
 use js_sys::{Array, Object, Uint8Array};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 
 const ID3V2_HEADER_SIZE: usize = 10;
 const ID3V1_SIZE: usize = 128;
@@ -78,6 +78,8 @@ pub fn parse_metadata_with_limits(
     let mut cover_mime: Option<String> = None;
     let mut cover_data: Option<Vec<u8>> = None;
     let mut cover_type: Option<u8> = None;
+    let mut lyrics: Option<String> = None;
+    let mut synced_lyrics: Option<String> = None;
     let mut audio_info = AudioInfo::new();
 
     if bytes.len() >= 4 && &bytes[0..4] == FLAC_SIGNATURE {
@@ -91,6 +93,8 @@ pub fn parse_metadata_with_limits(
             &mut cover_mime,
             &mut cover_data,
             &mut cover_type,
+            &mut lyrics,
+            &mut synced_lyrics,
             &mut audio_info,
         );
     } else {
@@ -104,6 +108,8 @@ pub fn parse_metadata_with_limits(
             &mut cover_mime,
             &mut cover_data,
             &mut cover_type,
+            &mut lyrics,
+            &mut synced_lyrics,
             &mut audio_info,
         );
     }
@@ -115,6 +121,8 @@ pub fn parse_metadata_with_limits(
         &cover_mime,
         &cover_data,
         &cover_type,
+        &lyrics,
+        &synced_lyrics,
         &audio_info,
     )
 }
@@ -148,6 +156,8 @@ fn build_result_object(
     cover_mime: &Option<String>,
     cover_data: &Option<Vec<u8>>,
     cover_type: &Option<u8>,
+    lyrics: &Option<String>,
+    synced_lyrics: &Option<String>,
     audio_info: &AudioInfo,
 ) -> JsValue {
     let obj = Object::new();
@@ -169,6 +179,12 @@ fn build_result_object(
     }
     if let Some(value) = cover_type {
         set_prop(&obj, "coverType", &JsValue::from_f64(*value as f64));
+    }
+    if let Some(value) = lyrics {
+        set_prop(&obj, "lyrics", &JsValue::from_str(value));
+    }
+    if let Some(value) = synced_lyrics {
+        set_prop(&obj, "syncedLyrics", &JsValue::from_str(value));
     }
     if let Some(sr) = audio_info.sample_rate {
         set_prop(&obj, "sampleRate", &JsValue::from_f64(sr as f64));
@@ -203,6 +219,8 @@ fn parse_mp3(
     cover_mime: &mut Option<String>,
     cover_data: &mut Option<Vec<u8>>,
     cover_type: &mut Option<u8>,
+    lyrics: &mut Option<String>,
+    synced_lyrics: &mut Option<String>,
     audio_info: &mut AudioInfo,
 ) {
     let mut mpeg_scan_start: usize = 0;
@@ -221,6 +239,8 @@ fn parse_mp3(
             cover_mime,
             cover_data,
             cover_type,
+            lyrics,
+            synced_lyrics,
         );
     }
 
@@ -315,6 +335,8 @@ fn parse_id3v2(
     cover_mime: &mut Option<String>,
     cover_data: &mut Option<Vec<u8>>,
     cover_type: &mut Option<u8>,
+    lyrics: &mut Option<String>,
+    synced_lyrics: &mut Option<String>,
 ) {
     if bytes.len() < ID3V2_HEADER_SIZE {
         return;
@@ -384,6 +406,17 @@ fn parse_id3v2(
                         }
                     }
                 }
+                b"ULT" => {
+                    if lyrics.is_none() && synced_lyrics.is_none() {
+                        if let Some(text) = parse_uslt_frame(frame_data, max_text_bytes) {
+                            if text.starts_with('[') && text.contains(']') {
+                                *synced_lyrics = Some(text);
+                            } else {
+                                *lyrics = Some(text);
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
 
@@ -447,6 +480,17 @@ fn parse_id3v2(
                     }
                 }
             }
+            b"USLT" => {
+                if lyrics.is_none() && synced_lyrics.is_none() {
+                    if let Some(text) = parse_uslt_frame(frame_data, max_text_bytes) {
+                        if text.starts_with('[') && text.contains(']') {
+                            *synced_lyrics = Some(text);
+                        } else {
+                            *lyrics = Some(text);
+                        }
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -460,6 +504,51 @@ fn parse_id3_text_frame(frame_data: &[u8], max_text_bytes: usize) -> Option<Stri
     }
     let encoding = frame_data[0];
     let text = &frame_data[1..];
+    let text = if text.len() > max_text_bytes {
+        &text[..max_text_bytes]
+    } else {
+        text
+    };
+
+    match encoding {
+        0 => Some(latin1_to_string(trim_trailing_zeros(text))),
+        1 => decode_utf16_with_bom(trim_trailing_zeros(text)),
+        2 => decode_utf16be(trim_trailing_zeros(text)),
+        3 => String::from_utf8(text.to_vec()).ok().map(trim_string),
+        _ => None,
+    }
+}
+
+fn parse_uslt_frame(frame_data: &[u8], max_text_bytes: usize) -> Option<String> {
+    // Structure de la frame USLT :
+    // encodage (1 octet) | langue (3 octets) | descripteur de contenu (terminé par un null) | texte des paroles
+    if frame_data.len() < 5 {
+        return None;
+    }
+    let encoding = frame_data[0];
+    // Ignorer la langue (3 octets)
+    let mut idx = 4;
+
+    // Ignorer le descripteur de contenu (chaîne terminée par un null)
+    if encoding == 0 || encoding == 3 {
+        // Latin1 ou UTF-8 : chercher un octet null unique
+        match find_zero(frame_data, idx) {
+            Some(end) => idx = end + 1,
+            None => return None,
+        }
+    } else {
+        // UTF-16 : chercher deux octets null consécutifs
+        match find_zero_utf16(frame_data, idx) {
+            Some(end) => idx = end + 2,
+            None => return None,
+        }
+    }
+
+    if idx >= frame_data.len() {
+        return None;
+    }
+
+    let text = &frame_data[idx..];
     let text = if text.len() > max_text_bytes {
         &text[..max_text_bytes]
     } else {
@@ -561,6 +650,8 @@ fn parse_flac(
     cover_mime: &mut Option<String>,
     cover_data: &mut Option<Vec<u8>>,
     cover_type: &mut Option<u8>,
+    lyrics: &mut Option<String>,
+    synced_lyrics: &mut Option<String>,
     audio_info: &mut AudioInfo,
 ) {
     if bytes.len() < 4 || &bytes[0..4] != FLAC_SIGNATURE {
@@ -586,7 +677,15 @@ fn parse_flac(
 
         match block_type {
             0 => parse_flac_streaminfo(block, audio_info),
-            4 => parse_vorbis_comment(block, max_text_bytes, title, artist, album),
+            4 => parse_vorbis_comment(
+                block,
+                max_text_bytes,
+                title,
+                artist,
+                album,
+                lyrics,
+                synced_lyrics,
+            ),
             6 => {
                 if let Some((mime, data, pic_type)) = parse_flac_picture(block, max_cover_bytes) {
                     let should_replace =
@@ -651,6 +750,8 @@ fn parse_vorbis_comment(
     title: &mut Option<String>,
     artist: &mut Option<String>,
     album: &mut Option<String>,
+    lyrics: &mut Option<String>,
+    synced_lyrics: &mut Option<String>,
 ) {
     if data.len() < 8 {
         return;
@@ -702,6 +803,20 @@ fn parse_vorbis_comment(
                         if album.is_none() {
                             if let Some(v) = value_str {
                                 *album = Some(v);
+                            }
+                        }
+                    }
+                    "LYRICS" => {
+                        if synced_lyrics.is_none() {
+                            if let Some(v) = value_str {
+                                *synced_lyrics = Some(v);
+                            }
+                        }
+                    }
+                    "UNSYNCEDLYRICS" => {
+                        if lyrics.is_none() {
+                            if let Some(v) = value_str {
+                                *lyrics = Some(v);
                             }
                         }
                     }

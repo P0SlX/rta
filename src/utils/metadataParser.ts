@@ -9,6 +9,8 @@ export interface MetadataResult {
   bitDepth?: number;
   bitrate?: number;
   channels?: number;
+  lyrics?: string;
+  syncedLyrics?: string;
 }
 
 export interface MetadataParseOptions {
@@ -98,6 +100,9 @@ function normalizeMetadata(value: unknown): MetadataResult {
     bitDepth: typeof record.bitDepth === "number" ? record.bitDepth : undefined,
     bitrate: typeof record.bitrate === "number" ? record.bitrate : undefined,
     channels: typeof record.channels === "number" ? record.channels : undefined,
+    lyrics: typeof record.lyrics === "string" ? record.lyrics : undefined,
+    syncedLyrics:
+      typeof record.syncedLyrics === "string" ? record.syncedLyrics : undefined,
   };
 }
 
@@ -122,6 +127,8 @@ function mergeMetadata(
     bitrate: primary.bitrate !== undefined ? primary.bitrate : fallback.bitrate,
     channels:
       primary.channels !== undefined ? primary.channels : fallback.channels,
+    lyrics: primary.lyrics || fallback.lyrics,
+    syncedLyrics: primary.syncedLyrics || fallback.syncedLyrics,
   };
 }
 

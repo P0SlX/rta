@@ -11,4 +11,6 @@ export interface PlaylistTrack {
   bitDepth?: number;
   status: PlaylistTrackStatus;
   file?: File;
+  lyrics?: string;
+  syncedLyrics?: string;
 }

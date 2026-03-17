@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    computed,
     onMounted,
     onUnmounted,
     ref,
@@ -9,6 +10,7 @@ import {
 } from "vue";
 import fallbackCoverUrl from "./assets/fallback-cover.svg";
 import AudioPlayerControls from "./components/AudioPlayerControls.vue";
+import LyricsPanel from "./components/LyricsPanel.vue";
 import PlayerBar from "./components/PlayerBar.vue";
 import PlaylistPanel from "./components/PlaylistPanel.vue";
 import RtaCanvas from "./components/RtaCanvas.vue";
@@ -35,6 +37,11 @@ const audioRta = useAudioRta();
 const displayMode = ref<DisplayMode>("line");
 const showSettings = ref(false);
 const showPlaylist = ref(false);
+const showLyrics = ref(false);
+
+const hasLyrics = computed(
+    () => !!(currentTrack.value?.syncedLyrics || currentTrack.value?.lyrics),
+);
 
 const spectrogramColorMap = ref<ColorMap>("custom");
 const spectrogramFrequencyScale = ref<FrequencyScale>("logarithmic");
@@ -371,6 +378,9 @@ async function applyMetadataToTrack(
         bitrate,
     );
 
+    const lyrics = metadata.lyrics ?? track.lyrics;
+    const syncedLyrics = metadata.syncedLyrics ?? track.syncedLyrics;
+
     return {
         ...track,
         title,
@@ -380,6 +390,8 @@ async function applyMetadataToTrack(
         sampleRate,
         bitDepth,
         formatLabel,
+        lyrics,
+        syncedLyrics,
     };
 }
 
@@ -627,155 +639,183 @@ watch(
     <div
         class="h-screen w-screen bg-[#0a0a0f] overflow-hidden flex flex-col font-sans text-white"
     >
-        <div class="relative flex-1 min-h-0 w-full">
-            <!-- Visualiseur -->
-            <RtaCanvas
-                v-if="displayMode !== 'spectrogram'"
-                class="absolute inset-0 w-full h-full"
-                :bands="bands"
-                :band-data="bandData"
-                :peak-data="peakData"
-                :display-mode="displayMode"
-                :min-db="audioRta.minDb.value"
-                :max-db="audioRta.maxDb.value"
-                :peak-hold="audioRta.peakHold.value"
-                :current-time="audioRta.currentTime.value"
-                :duration="audioRta.duration.value"
-                :is-playing="audioRta.isPlaying.value"
-            />
-            <SpectrogramCanvas
-                v-else
-                class="absolute inset-0 w-full h-full"
-                :bands="bands"
-                :band-data="bandData"
-                :min-db="audioRta.minDb.value"
-                :max-db="audioRta.maxDb.value"
-                :is-playing="audioRta.isPlaying.value"
-                :color-map="spectrogramColorMap"
-                :frequency-scale="spectrogramFrequencyScale"
-                :gamma="spectrogramGamma"
-                :column-interval="spectrogramColumnInterval"
-            />
-
-            <!-- Panneau -->
-            <transition
-                enter-active-class="transition duration-300 ease-out"
-                enter-from-class="opacity-0 scale-95"
-                enter-to-class="opacity-100 scale-100"
-                leave-active-class="transition duration-200 ease-in"
-                leave-from-class="opacity-100 scale-100"
-                leave-to-class="opacity-0 scale-95"
-            >
-                <div
-                    v-if="showSettings"
-                    ref="panelRef"
-                    class="absolute md:fixed z-20 inset-0 md:inset-auto pointer-events-auto bg-[#1a1a2e]/95 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col w-full h-full md:h-auto md:max-h-[75vh] md:w-auto md:max-w-5xl md:border-2 md:border-white/20 md:rounded-3xl"
-                    :style="
-                        !isMobile
-                            ? {
-                                  left: panelPosition.x + 'px',
-                                  top: panelPosition.y + 'px',
-                                  cursor: isDragging ? 'grabbing' : 'default',
-                              }
-                            : {}
-                    "
-                >
-                    <!-- En-tête -->
-                    <div
-                        @mousedown="startDrag"
-                        @touchstart="startDrag"
-                        class="px-4 py-2 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
-                        :style="{
-                            cursor: isMobile
-                                ? 'default'
-                                : isDragging
-                                  ? 'grabbing'
-                                  : 'grab',
-                        }"
-                    >
-                        <h2
-                            class="text-sm font-bold uppercase tracking-widest text-gray-300"
-                        >
-                            Configuration
-                        </h2>
-                        <button
-                            @click="showSettings = false"
-                            class="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-3 py-1 hover:bg-white/10 rounded-lg"
-                            title="Fermer"
-                        >
-                            ×
-                        </button>
-                    </div>
-
-                    <div
-                        class="flex-1 overflow-y-auto px-4 pb-5 pt-3 space-y-5"
-                    >
-                        <!-- Composant Contrôles Audio (Curseurs/Réglages) -->
-                        <AudioPlayerControls
-                            :error="audioRta.error.value"
-                            :fft-size="audioRta.fftSize.value"
-                            :sample-rate="audioRta.sampleRate.value"
-                            :smoothing-time-constant="
-                                audioRta.smoothingTimeConstant.value
-                            "
-                            :extra-smoothing="audioRta.extraSmoothing.value"
-                            :peak-hold="audioRta.peakHold.value"
-                            :peak-decay="audioRta.peakDecay.value"
-                            :num-bands="audioRta.numBands.value"
-                            :display-mode="displayMode"
-                            @update-fft-size="handleUpdateFftSize"
-                            @update-smoothing-time-constant="
-                                handleUpdateSmoothingTimeConstant
-                            "
-                            @update-extra-smoothing="handleUpdateExtraSmoothing"
-                            @update-peak-hold="handleUpdatePeakHold"
-                            @update-peak-decay="handleUpdatePeakDecay"
-                            @update-num-bands="handleUpdateNumBands"
-                            @update-display-mode="handleUpdateDisplayMode"
-                        />
-
-                        <!-- Composant Contrôles Spectrogramme -->
-                        <SpectrogramControls
-                            v-if="displayMode === 'spectrogram'"
-                            :color-map="spectrogramColorMap"
-                            :frequency-scale="spectrogramFrequencyScale"
-                            :gamma="spectrogramGamma"
-                            :column-interval="spectrogramColumnInterval"
-                            @update-color-map="handleUpdateSpectrogramColorMap"
-                            @update-frequency-scale="
-                                handleUpdateSpectrogramFrequencyScale
-                            "
-                            @update-gamma="handleUpdateSpectrogramGamma"
-                            @update-column-interval="
-                                handleUpdateSpectrogramColumnInterval
-                            "
-                        />
-                    </div>
-                </div>
-            </transition>
-
-            <!-- Panneau Playlist -->
-            <transition
-                enter-active-class="transition duration-300 ease-out"
-                enter-from-class="opacity-0 translate-x-4"
-                enter-to-class="opacity-100 translate-x-0"
-                leave-active-class="transition duration-200 ease-in"
-                leave-from-class="opacity-100 translate-x-0"
-                leave-to-class="opacity-0 translate-x-4"
-            >
-                <PlaylistPanel
-                    v-if="showPlaylist"
-                    :current-track="currentTrack"
-                    :queue="queue"
-                    :history="history"
+        <div class="relative flex-1 min-h-0 w-full flex">
+            <!-- Zone visualiseur -->
+            <div class="relative flex-1 min-h-0 min-w-0">
+                <RtaCanvas
+                    v-if="displayMode !== 'spectrogram'"
+                    class="absolute inset-0 w-full h-full"
+                    :bands="bands"
+                    :band-data="bandData"
+                    :peak-data="peakData"
+                    :display-mode="displayMode"
+                    :min-db="audioRta.minDb.value"
+                    :max-db="audioRta.maxDb.value"
+                    :peak-hold="audioRta.peakHold.value"
+                    :current-time="audioRta.currentTime.value"
+                    :duration="audioRta.duration.value"
                     :is-playing="audioRta.isPlaying.value"
-                    :is-loading-tracks="isLoadingTracks"
+                />
+                <SpectrogramCanvas
+                    v-else
+                    class="absolute inset-0 w-full h-full"
+                    :bands="bands"
                     :band-data="bandData"
                     :min-db="audioRta.minDb.value"
                     :max-db="audioRta.maxDb.value"
-                    @close="showPlaylist = false"
-                    @select-track="handleSelectTrack"
-                    @move-queue-track="moveQueueTrack"
+                    :is-playing="audioRta.isPlaying.value"
+                    :color-map="spectrogramColorMap"
+                    :frequency-scale="spectrogramFrequencyScale"
+                    :gamma="spectrogramGamma"
+                    :column-interval="spectrogramColumnInterval"
+                />
+
+                <!-- Panneau Playlist -->
+                <transition
+                    enter-active-class="transition duration-300 ease-out"
+                    enter-from-class="opacity-0 translate-x-4"
+                    enter-to-class="opacity-100 translate-x-0"
+                    leave-active-class="transition duration-200 ease-in"
+                    leave-from-class="opacity-100 translate-x-0"
+                    leave-to-class="opacity-0 translate-x-4"
+                >
+                    <PlaylistPanel
+                        v-if="showPlaylist"
+                        :current-track="currentTrack"
+                        :queue="queue"
+                        :history="history"
+                        :is-playing="audioRta.isPlaying.value"
+                        :is-loading-tracks="isLoadingTracks"
+                        :band-data="bandData"
+                        :min-db="audioRta.minDb.value"
+                        :max-db="audioRta.maxDb.value"
+                        @close="showPlaylist = false"
+                        @select-track="handleSelectTrack"
+                        @move-queue-track="moveQueueTrack"
+                    />
+                </transition>
+
+                <!-- Panneau Réglages -->
+                <transition
+                    enter-active-class="transition duration-300 ease-out"
+                    enter-from-class="opacity-0 scale-95"
+                    enter-to-class="opacity-100 scale-100"
+                    leave-active-class="transition duration-200 ease-in"
+                    leave-from-class="opacity-100 scale-100"
+                    leave-to-class="opacity-0 scale-95"
+                >
+                    <div
+                        v-if="showSettings"
+                        ref="panelRef"
+                        class="absolute md:fixed z-20 inset-0 md:inset-auto pointer-events-auto bg-[#1a1a2e]/95 backdrop-blur-xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col w-full h-full md:h-auto md:max-h-[75vh] md:w-auto md:max-w-5xl md:border-2 md:border-white/20 md:rounded-3xl"
+                        :style="
+                            !isMobile
+                                ? {
+                                      left: panelPosition.x + 'px',
+                                      top: panelPosition.y + 'px',
+                                      cursor: isDragging
+                                          ? 'grabbing'
+                                          : 'default',
+                                  }
+                                : {}
+                        "
+                    >
+                        <!-- En-tête -->
+                        <div
+                            @mousedown="startDrag"
+                            @touchstart="startDrag"
+                            class="px-4 py-2 border-b border-white/10 flex justify-between items-center bg-white/5 select-none"
+                            :style="{
+                                cursor: isMobile
+                                    ? 'default'
+                                    : isDragging
+                                      ? 'grabbing'
+                                      : 'grab',
+                            }"
+                        >
+                            <h2
+                                class="text-sm font-bold uppercase tracking-widest text-gray-300"
+                            >
+                                Configuration
+                            </h2>
+                            <button
+                                @click="showSettings = false"
+                                class="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-3 py-1 hover:bg-white/10 rounded-lg"
+                                title="Fermer"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div
+                            class="flex-1 overflow-y-auto px-4 pb-5 pt-3 space-y-5"
+                        >
+                            <!-- Composant Contrôles Audio (Curseurs/Réglages) -->
+                            <AudioPlayerControls
+                                :error="audioRta.error.value"
+                                :fft-size="audioRta.fftSize.value"
+                                :sample-rate="audioRta.sampleRate.value"
+                                :smoothing-time-constant="
+                                    audioRta.smoothingTimeConstant.value
+                                "
+                                :extra-smoothing="audioRta.extraSmoothing.value"
+                                :peak-hold="audioRta.peakHold.value"
+                                :peak-decay="audioRta.peakDecay.value"
+                                :num-bands="audioRta.numBands.value"
+                                :display-mode="displayMode"
+                                @update-fft-size="handleUpdateFftSize"
+                                @update-smoothing-time-constant="
+                                    handleUpdateSmoothingTimeConstant
+                                "
+                                @update-extra-smoothing="
+                                    handleUpdateExtraSmoothing
+                                "
+                                @update-peak-hold="handleUpdatePeakHold"
+                                @update-peak-decay="handleUpdatePeakDecay"
+                                @update-num-bands="handleUpdateNumBands"
+                                @update-display-mode="handleUpdateDisplayMode"
+                            />
+
+                            <!-- Composant Contrôles Spectrogramme -->
+                            <SpectrogramControls
+                                v-if="displayMode === 'spectrogram'"
+                                :color-map="spectrogramColorMap"
+                                :frequency-scale="spectrogramFrequencyScale"
+                                :gamma="spectrogramGamma"
+                                :column-interval="spectrogramColumnInterval"
+                                @update-color-map="
+                                    handleUpdateSpectrogramColorMap
+                                "
+                                @update-frequency-scale="
+                                    handleUpdateSpectrogramFrequencyScale
+                                "
+                                @update-gamma="handleUpdateSpectrogramGamma"
+                                @update-column-interval="
+                                    handleUpdateSpectrogramColumnInterval
+                                "
+                            />
+                        </div>
+                    </div>
+                </transition>
+            </div>
+
+            <!-- Panneau Paroles (à droite du canvas) -->
+            <transition
+                enter-active-class="transition-opacity duration-300 ease-out"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-200 ease-in"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <LyricsPanel
+                    v-if="showLyrics && hasLyrics"
+                    :synced-lyrics="currentTrack?.syncedLyrics"
+                    :lyrics="currentTrack?.lyrics"
+                    :current-time="audioRta.currentTime.value"
+                    :is-playing="audioRta.isPlaying.value"
+                    @close="showLyrics = false"
+                    @seek="handleSeek"
                 />
             </transition>
         </div>
@@ -789,6 +829,8 @@ watch(
             :queue="queue"
             :history="history"
             :volume="audioRta.volume.value"
+            :has-lyrics="hasLyrics"
+            :show-lyrics="showLyrics"
             @files-selected="handleFilesSelected"
             @play="handlePlay"
             @pause="handlePause"
@@ -799,6 +841,7 @@ watch(
             @select-track="handleSelectTrack"
             @move-queue-track="moveQueueTrack"
             @toggle-settings="showSettings = !showSettings"
+            @toggle-lyrics="showLyrics = !showLyrics"
             @toggle-playlist="showPlaylist = !showPlaylist"
             @volume-change="handleVolumeChange"
         />
