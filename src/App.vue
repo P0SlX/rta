@@ -17,7 +17,7 @@ import RtaCanvas from "./components/RtaCanvas.vue";
 import SpectrogramCanvas from "./components/SpectrogramCanvas.vue";
 import SpectrogramControls from "./components/SpectrogramControls.vue";
 import { useAudioRta } from "./composables/useAudioRta";
-import type { PlaylistTrack, PlaylistTrackStatus } from "./types/playlist";
+import type { PlaylistTrack } from "./types/playlist";
 import type {
     ColorMap,
     DisplayMode,
@@ -134,9 +134,22 @@ const bandData = shallowRef<Float32Array | null>(null);
 const peakData = shallowRef<Float32Array | null>(null);
 const bands = shallowRef<RtaBand[]>([]);
 
-const queue = ref<PlaylistTrack[]>([]);
-const history = ref<PlaylistTrack[]>([]);
-const currentTrack = ref<PlaylistTrack | null>(null);
+const playlist = ref<PlaylistTrack[]>([]);
+const currentIndex = ref(-1);
+
+const currentTrack = computed<PlaylistTrack | null>(
+    () => playlist.value[currentIndex.value] ?? null,
+);
+
+const history = computed(() =>
+    currentIndex.value <= 0 ? [] : playlist.value.slice(0, currentIndex.value),
+);
+const queue = computed(() =>
+    currentIndex.value < 0
+        ? playlist.value.slice()
+        : playlist.value.slice(currentIndex.value + 1),
+);
+
 const isLoadingTracks = ref(false);
 
 let bandDataBuffer: Float32Array | null = null;
@@ -272,17 +285,13 @@ function parseTrackInfo(fileName: string) {
     return { artist: "Fichier local", title: baseName };
 }
 
-function createBaseTrack(
-    file: File,
-    status: PlaylistTrackStatus,
-): PlaylistTrack {
+function createBaseTrack(file: File): PlaylistTrack {
     const { title, artist } = parseTrackInfo(file.name);
     return {
         id: createTrackId(file),
         title,
         artist,
         coverUrl: fallbackCoverUrl,
-        status,
         file,
     };
 }
@@ -433,61 +442,52 @@ async function loadTrack(track: PlaylistTrack, autoplay = false) {
         await audioRta.loadFile(track.file);
         bands.value = audioRta.getBands();
         startUpdateLoop();
-        if (autoplay) {
-            await audioRta.play();
-        }
+        if (autoplay) await audioRta.play();
     } catch (e) {
         console.error("Échec du chargement du fichier :", e);
     }
 }
 
-function pushToHistory(track: PlaylistTrack) {
-    history.value.push({ ...track, status: "played" });
-}
-
-async function setCurrentTrack(track: PlaylistTrack, autoplay = false) {
+async function setCurrentIndex(index: number, autoplay = false) {
+    if (index < 0 || index >= playlist.value.length) return;
     audioRta.stop();
-    currentTrack.value = { ...track, status: "current" };
-    await loadTrack(currentTrack.value, autoplay);
+    currentIndex.value = index;
+    await loadTrack(playlist.value[index], autoplay);
 }
 
 async function handleFilesSelected(files: File[]) {
     if (!files.length) return;
 
-    const baseTracks = files.map((file) => createBaseTrack(file, "upcoming"));
+    const wasEmpty = playlist.value.length === 0 || currentIndex.value === -1;
+    const insertAt = playlist.value.length;
+    const baseTracks = files.map((f) => createBaseTrack(f));
 
-    // En prio, on va enrichir la première piste pour que ca s'affiche le plus vite possible
-    // ensuite on fera le reste en tache de fond
-    if (baseTracks.length > 0 && baseTracks[0].file) {
+    // Enrichir la première piste en priorité pour affichage immédiat
+    if (baseTracks[0].file) {
         try {
             await ensureMetadataWasmLoaded();
-            const firstMetadata = await parseMetadataFromFile(
-                baseTracks[0].file,
-            );
-            const firstEnriched = await applyMetadataToTrack(
-                baseTracks[0],
-                firstMetadata,
-            );
-            queue.value.push(firstEnriched);
-
-            if (!currentTrack.value) {
-                const next = queue.value.shift();
-                if (next) {
-                    void setCurrentTrack(next, false);
-                }
-            }
-        } catch (error) {
-            console.warn("First track metadata parsing failed:", error);
-            queue.value.push(baseTracks[0]);
+            const meta = await parseMetadataFromFile(baseTracks[0].file);
+            baseTracks[0] = await applyMetadataToTrack(baseTracks[0], meta);
+        } catch {
+            // Metadata non disponible, on garde le track de base
         }
     }
 
+    playlist.value.push(...baseTracks);
+
+    // Si la playlist était vide (ou terminée), démarrer sur la première piste ajoutée
+    if (wasEmpty) {
+        void setCurrentIndex(insertAt, false);
+    }
+
+    // Enrichir le reste en arrière-plan
     if (baseTracks.length > 1) {
-        const remainingTracks = baseTracks.slice(1);
         isLoadingTracks.value = true;
-        void enrichTracksWithMetadataBatch(remainingTracks)
-            .then((enrichedTracks) => {
-                queue.value.push(...enrichedTracks);
+        void enrichTracksWithMetadataBatch(baseTracks.slice(1))
+            .then((enriched) => {
+                for (let i = 0; i < enriched.length; i++) {
+                    playlist.value[insertAt + 1 + i] = enriched[i];
+                }
             })
             .finally(() => {
                 isLoadingTracks.value = false;
@@ -500,15 +500,11 @@ async function handlePlay() {
         await loadTrack(currentTrack.value, true);
         return;
     }
-
-    if (!audioRta.isLoaded.value && queue.value.length) {
-        const next = queue.value.shift();
-        if (next) {
-            await setCurrentTrack(next, true);
-        }
+    if (!audioRta.isLoaded.value && playlist.value.length > 0) {
+        const idx = currentIndex.value >= 0 ? currentIndex.value : 0;
+        await setCurrentIndex(idx, true);
         return;
     }
-
     await audioRta.play();
 }
 
@@ -567,64 +563,45 @@ function handleVolumeChange(value: number) {
     audioRta.setVolume(value);
 }
 
-function moveQueueTrack(trackId: string, direction: "up" | "down") {
-    const index = queue.value.findIndex((track) => track.id === trackId);
-    if (index === -1) return;
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= queue.value.length) return;
-    const updated = [...queue.value];
-    [updated[index], updated[targetIndex]] = [
-        updated[targetIndex],
-        updated[index],
-    ];
-    queue.value = updated;
+function handleRemoveTrack(trackId: string) {
+    const absIndex = playlist.value.findIndex((t) => t.id === trackId);
+    if (absIndex === -1 || absIndex <= currentIndex.value) return;
+    playlist.value.splice(absIndex, 1);
+    // Trigger réactivité
+    playlist.value = playlist.value.slice();
 }
 
 async function handleSelectTrack(trackId: string) {
+    // Pause/reprise si c'est déjà la piste courante
     if (currentTrack.value?.id === trackId) {
-        if (audioRta.isPlaying.value) {
-            audioRta.pause();
-        } else {
-            await audioRta.play();
-        }
+        audioRta.isPlaying.value ? audioRta.pause() : await audioRta.play();
         return;
     }
-
-    const queueIndex = queue.value.findIndex((track) => track.id === trackId);
-    const historyIndex = history.value.findIndex(
-        (track) => track.id === trackId,
-    );
-    const selected =
-        queueIndex >= 0
-            ? queue.value.splice(queueIndex, 1)[0]
-            : historyIndex >= 0
-              ? history.value.splice(historyIndex, 1)[0]
-              : null;
-
-    if (!selected) return;
-    if (currentTrack.value) {
-        pushToHistory(currentTrack.value);
-    }
-
-    await setCurrentTrack(selected, true);
+    const idx = playlist.value.findIndex((t) => t.id === trackId);
+    if (idx === -1) return;
+    await setCurrentIndex(idx, true);
 }
 
 async function handleNextTrack() {
-    const next = queue.value.shift();
-    if (!next) return;
-    if (currentTrack.value) {
-        pushToHistory(currentTrack.value);
-    }
-    await setCurrentTrack(next, true);
+    const nextIdx = currentIndex.value + 1;
+    if (nextIdx >= playlist.value.length) return;
+    await setCurrentIndex(nextIdx, true);
 }
 
 async function handlePreviousTrack() {
-    const previous = history.value.pop();
-    if (!previous) return;
-    if (currentTrack.value) {
-        queue.value.unshift({ ...currentTrack.value, status: "upcoming" });
+    // Si > 5s : revenir au début de la piste courante
+    if (audioRta.currentTime.value > 5) {
+        audioRta.seek(0);
+        return;
     }
-    await setCurrentTrack(previous, true);
+    // Si < 5s et piste précédente disponible : aller à la précédente
+    const prevIdx = currentIndex.value - 1;
+    if (prevIdx >= 0) {
+        await setCurrentIndex(prevIdx, true);
+    } else {
+        // Pas de précédente : revenir au début de la courante
+        audioRta.seek(0);
+    }
 }
 
 watch(
@@ -686,12 +663,9 @@ watch(
                         :history="history"
                         :is-playing="audioRta.isPlaying.value"
                         :is-loading-tracks="isLoadingTracks"
-                        :band-data="bandData"
-                        :min-db="audioRta.minDb.value"
-                        :max-db="audioRta.maxDb.value"
                         @close="showPlaylist = false"
                         @select-track="handleSelectTrack"
-                        @move-queue-track="moveQueueTrack"
+                        @remove-track="handleRemoveTrack"
                     />
                 </transition>
 
@@ -829,6 +803,7 @@ watch(
             :queue="queue"
             :history="history"
             :volume="audioRta.volume.value"
+            :has-next="currentIndex < playlist.length - 1"
             :has-lyrics="hasLyrics"
             :show-lyrics="showLyrics"
             @files-selected="handleFilesSelected"
@@ -839,7 +814,6 @@ watch(
             @next="handleNextTrack"
             @previous="handlePreviousTrack"
             @select-track="handleSelectTrack"
-            @move-queue-track="moveQueueTrack"
             @toggle-settings="showSettings = !showSettings"
             @toggle-lyrics="showLyrics = !showLyrics"
             @toggle-playlist="showPlaylist = !showPlaylist"

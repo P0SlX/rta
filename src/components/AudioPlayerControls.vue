@@ -164,7 +164,7 @@ const peakHoldModel = computed({
                 <div class="flex justify-between">
                     <label
                         class="text-xs font-bold uppercase tracking-widest text-gray-500"
-                        >Lissage EMA (Rendu)</label
+                        >Lissage EMA</label
                     >
                     <span class="text-[#00c896] font-mono text-sm font-bold">{{
                         extraSmoothingModel.toFixed(2)

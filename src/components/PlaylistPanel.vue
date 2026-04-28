@@ -9,15 +9,12 @@ const props = defineProps<{
     history: PlaylistTrack[];
     isPlaying: boolean;
     isLoadingTracks?: boolean;
-    bandData?: Float32Array | null;
-    minDb?: number;
-    maxDb?: number;
 }>();
 
 const emit = defineEmits<{
     close: [];
     selectTrack: [trackId: string];
-    moveQueueTrack: [trackId: string, direction: "up" | "down"];
+    removeTrack: [trackId: string];
 }>();
 
 const scrollContainerRef = ref<HTMLDivElement | null>(null);
@@ -27,12 +24,8 @@ function handleTrackClick(trackId: string) {
     emit("selectTrack", trackId);
 }
 
-function moveTrackUp(trackId: string) {
-    emit("moveQueueTrack", trackId, "up");
-}
-
-function moveTrackDown(trackId: string) {
-    emit("moveQueueTrack", trackId, "down");
+function removeTrack(trackId: string) {
+    emit("removeTrack", trackId);
 }
 /**
  * Mini visualizer désactivé car l'animation ne me plait pas...
@@ -242,7 +235,7 @@ watch(
                 </h3>
                 <div>
                     <div
-                        v-for="(track, index) in queue"
+                        v-for="track in queue"
                         :key="track.id"
                         class="flex cursor-pointer items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors group"
                     >
@@ -268,48 +261,26 @@ watch(
                                 {{ track.artist || "Fichier local" }}
                             </div>
                         </button>
-                        <div
-                            class="flex flex-col items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        <button
+                            class="p-1 cursor-pointer text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                            @click.stop="removeTrack(track.id)"
+                            title="Supprimer de la file"
                         >
-                            <button
-                                class="p-1 cursor-pointer text-gray-400 hover:text-white disabled:opacity-20"
-                                :disabled="index === 0"
-                                @click="moveTrackUp(track.id)"
-                                title="Monter"
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
                             >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-3 w-3"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
-                                >
-                                    <path
-                                        fill-rule="evenodd"
-                                        d="M3 12l7-7 7 7H3z"
-                                        clip-rule="evenodd"
-                                    />
-                                </svg>
-                            </button>
-                            <button
-                                class="p-1 cursor-pointer text-gray-400 hover:text-white disabled:opacity-20"
-                                :disabled="index === queue.length - 1"
-                                @click="moveTrackDown(track.id)"
-                                title="Descendre"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="h-3 w-3"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
-                                >
-                                    <path
-                                        fill-rule="evenodd"
-                                        d="M3 8l7 7 7-7H3z"
-                                        clip-rule="evenodd"
-                                    />
-                                </svg>
-                            </button>
-                        </div>
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"
+                                />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>

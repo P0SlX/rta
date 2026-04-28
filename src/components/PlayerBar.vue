@@ -13,6 +13,7 @@ const props = defineProps<{
     queue: PlaylistTrack[];
     history: PlaylistTrack[];
     volume: number;
+    hasNext: boolean;
     hasLyrics: boolean;
     showLyrics: boolean;
 }>();
@@ -26,7 +27,6 @@ const emit = defineEmits<{
     next: [];
     previous: [];
     selectTrack: [trackId: string];
-    moveQueueTrack: [trackId: string, direction: "up" | "down"];
     toggleSettings: [];
     toggleLyrics: [];
     togglePlaylist: [];
@@ -38,6 +38,8 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const isPlayable = computed(
     () => props.isLoaded || !!props.currentTrack || props.queue.length > 0,
 );
+// Previous est dispo dès qu'une piste est chargée (revenir au début ou piste précédente)
+const hasPrevious = computed(() => props.isLoaded || !!props.currentTrack);
 const showPause = computed(() => props.isLoaded && props.isPlaying);
 
 const seekPosition = computed(() => {
@@ -141,7 +143,7 @@ function handleSeek(event: Event) {
                 <div class="flex items-center gap-3">
                     <button
                         class="p-2 text-white/80 hover:text-white cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        :disabled="!isPlayable || !history.length"
+                        :disabled="!hasPrevious"
                         @click="emit('previous')"
                         title="Piste précédente"
                     >
@@ -193,7 +195,7 @@ function handleSeek(event: Event) {
 
                     <button
                         class="p-2 text-white/80 hover:text-white cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        :disabled="!isPlayable || !queue.length"
+                        :disabled="!props.hasNext"
                         @click="emit('next')"
                         title="Piste suivante"
                     >
@@ -342,10 +344,19 @@ function handleSeek(event: Event) {
                         />
                     </svg>
                     <span
-                        v-if="queue.length"
+                        v-if="queue.length || history.length"
                         class="absolute -top-1 -right-1 bg-[#00c896] text-black text-[10px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-1"
                     >
-                        {{ queue.length > 99 ? "99+" : queue.length }}
+                        {{
+                            history.length +
+                                (currentTrack ? 1 : 0) +
+                                queue.length >
+                            99
+                                ? "99+"
+                                : history.length +
+                                  (currentTrack ? 1 : 0) +
+                                  queue.length
+                        }}
                     </span>
                 </button>
 

@@ -1,5 +1,3 @@
-export type PlaylistTrackStatus = "current" | "upcoming" | "played";
-
 export interface PlaylistTrack {
   id: string;
   title: string;
@@ -9,7 +7,6 @@ export interface PlaylistTrack {
   formatLabel?: string;
   sampleRate?: number;
   bitDepth?: number;
-  status: PlaylistTrackStatus;
   file?: File;
   lyrics?: string;
   syncedLyrics?: string;
