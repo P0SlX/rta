@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import type { ColorMap, FrequencyScale, RtaBand } from "../types/rta";
+import {
+    RTA_COLORS,
+    type ColorMap,
+    type FrequencyScale,
+    type RtaBand,
+} from "../types/rta";
+import { resizeCanvasPreservingContent } from "../utils/canvasResize";
 import {
     renderSpectrogram,
     renderSpectrogramColumn,
@@ -69,16 +75,24 @@ function updateCanvasSize() {
     const rect = containerRef.value.getBoundingClientRect();
     const newWidth = rect.width;
     const newHeight = rect.height;
+    if (newWidth <= 0 || newHeight <= 0) return;
 
-    if (newWidth !== canvasWidth.value || newHeight !== canvasHeight.value) {
-        canvasWidth.value = newWidth;
-        canvasHeight.value = newHeight;
+    const previousWidth = canvasWidth.value;
+    const previousHeight = canvasHeight.value;
 
-        canvasRef.value.width = newWidth * dpr;
-        canvasRef.value.height = newHeight * dpr;
+    canvasWidth.value = newWidth;
+    canvasHeight.value = newHeight;
 
-        canvasRef.value.style.width = `${newWidth}px`;
-        canvasRef.value.style.height = `${newHeight}px`;
+    const { resized } = resizeCanvasPreservingContent(canvasRef.value, {
+        cssWidth: newWidth,
+        cssHeight: newHeight,
+        dpr,
+        backgroundColor: RTA_COLORS.background,
+        contextAttributes: { alpha: false },
+    });
+
+    if (resized || newWidth !== previousWidth || newHeight !== previousHeight) {
+        doRender(performance.now());
     }
 }
 

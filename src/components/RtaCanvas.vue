@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
-import type { DisplayMode, RtaBand, RtaRenderConfig } from "../types/rta";
+import {
+    RTA_COLORS,
+    type DisplayMode,
+    type RtaBand,
+    type RtaRenderConfig,
+} from "../types/rta";
+import { resizeCanvasPreservingContent } from "../utils/canvasResize";
 import { clearGridCache, renderRta } from "../utils/rtaRender";
 
 const props = defineProps<{
@@ -57,16 +63,27 @@ function updateCanvasSize() {
     if (!containerRef.value || !canvasRef.value) return;
 
     const rect = containerRef.value.getBoundingClientRect();
-    canvasWidth.value = rect.width;
-    canvasHeight.value = rect.height;
+    const newWidth = rect.width;
+    const newHeight = rect.height;
+    if (newWidth <= 0 || newHeight <= 0) return;
 
-    canvasRef.value.width = canvasWidth.value * dpr;
-    canvasRef.value.height = canvasHeight.value * dpr;
+    const previousWidth = canvasWidth.value;
+    const previousHeight = canvasHeight.value;
 
-    canvasRef.value.style.width = `${canvasWidth.value}px`;
-    canvasRef.value.style.height = `${canvasHeight.value}px`;
+    canvasWidth.value = newWidth;
+    canvasHeight.value = newHeight;
 
-    clearGridCache();
+    const { resized } = resizeCanvasPreservingContent(canvasRef.value, {
+        cssWidth: newWidth,
+        cssHeight: newHeight,
+        dpr,
+        backgroundColor: RTA_COLORS.background,
+    });
+
+    if (resized || newWidth !== previousWidth || newHeight !== previousHeight) {
+        clearGridCache();
+        doRender();
+    }
 }
 
 function doRender() {
